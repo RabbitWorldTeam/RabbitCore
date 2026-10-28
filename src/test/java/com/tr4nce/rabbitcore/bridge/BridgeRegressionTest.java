@@ -1,0 +1,214 @@
+package com.tr4nce.rabbitcore.bridge;
+
+import com.google.gson.*;
+import com.tr4nce.rabbitcore.world.storage.BridgePreferencesData;
+import net.minecraft.nbt.CompoundTag;
+import java.io.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.security.MessageDigest;
+import java.util.*;
+import java.util.concurrent.*;
+
+/** Runs with bridgeTest and check; real loopback WebSocket frames test transport boundaries. */
+public final class BridgeRegressionTest {
+    private static int checks;
+    private static void check(boolean value, String description) {
+        checks++;
+        if (!value) throw new AssertionError(description);
+    }
+    private static JsonObject external(String text) {
+        JsonObject data = new JsonObject();
+        JsonObject source = new JsonObject(); source.addProperty("id", "qq:group:1"); source.addProperty("name", "交流群");
+        JsonObject sender = new JsonObject(); sender.addProperty("id", "qq:2"); sender.addProperty("name", "小明");
+        data.add("source", source); data.add("sender", sender); data.addProperty("text", text); return data;
+    }
+    private static void invalid(Runnable action, String code) {
+        try { action.run(); throw new AssertionError("Expected " + code); }
+        catch (BridgeProtocol.Invalid e) { check(e.code.equals(code), "error code " + code); }
+    }
+    private static Path configFile(String content) throws IOException {
+        Path path = Files.createTempFile("bridge-test-", ".toml"); Files.writeString(path, content); return path;
+    }
+    private static BridgeConfig config(String content) throws IOException {
+        Path path = configFile(content);
+        try { return BridgeConfig.load(path); } finally { Files.delete(path); }
+    }
+    private static void await(java.util.function.BooleanSupplier predicate) throws Exception {
+        long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+        while (!predicate.getAsBoolean()) {
+            if (System.nanoTime() > end) throw new AssertionError("Timed out");
+            Thread.sleep(20);
+        }
+    }
+    public static void main(String[] args) throws Exception {
+        check(BridgeProtocol.tokens("Steve @STEVE Steve你好 Steve123 mySteve Steve_").equals(
+                Set.of("steve", "steve123", "mysteve", "steve_")), "full game IDs without @");
+        check(BridgeProtocol.clean("§c红色\n&atext\u0000", false).equals("红色 &atext"), "literal text cleaning");
+        try { BridgeProtocol.parse("{unquoted: true}"); throw new AssertionError("lenient JSON accepted"); }
+        catch (RuntimeException expected) { checks++; }
+        try { BridgeProtocol.parse("[".repeat(33) + "0" + "]".repeat(33)); throw new AssertionError("deep JSON accepted"); }
+        catch (RuntimeException expected) { checks++; }
+        BridgePreferencesData preferences = new BridgePreferencesData();
+        UUID preferenceId = UUID.randomUUID();
+        check(preferences.sound(preferenceId) && preferences.receive(preferenceId), "personal defaults enabled");
+        preferences.set(preferenceId, true, false); preferences.set(preferenceId, false, false);
+        BridgePreferencesData loaded = BridgePreferencesData.load(preferences.save(new CompoundTag()));
+        check(!loaded.sound(preferenceId) && !loaded.receive(preferenceId), "preferences survive NBT round trip");
+        loaded.set(preferenceId, true, true);
+        check(loaded.sound(preferenceId) && !loaded.receive(preferenceId), "personal switches independent");
+        JsonObject root = BridgeProtocol.message("rabbit-house", "chat.external", external("hello"));
+        check(BridgeProtocol.envelope(root, "rabbit-house").type().equals("chat.external"), "valid envelope");
+        invalid(() -> BridgeProtocol.envelope(root, "other"), "SERVER_ID_MISMATCH");
+        root.addProperty("version", 2); invalid(() -> BridgeProtocol.envelope(root, "rabbit-house"), "UNSUPPORTED_VERSION");
+        root.addProperty("version", "1"); invalid(() -> BridgeProtocol.envelope(root, "rabbit-house"), "INVALID_MESSAGE");
+        JsonObject data = external("x"); data.addProperty("text", "😀".repeat(2001));
+        invalid(() -> BridgeProtocol.external(data), "MESSAGE_TOO_LARGE");
+        data.addProperty("text", "hello"); data.add("mentions", JsonParser.parseString("[\"Steve\", 1]"));
+        invalid(() -> BridgeProtocol.external(data), "INVALID_MESSAGE");
+        data.add("mentions", JsonParser.parseString("[\"Steve\", \"STEVE\"]"));
+        check(BridgeProtocol.external(data).mentions().size() == 1, "mention deduplication");
+        BridgeConfig defaults = config("");
+        check(!defaults.flag("enabled"), "disabled by default");
+        Path configDirectory = Files.createTempDirectory("bridge-config-");
+        Path generated = configDirectory.resolve(BridgeConfig.FILE);
+        try {
+            BridgeConfig.createIfMissing(generated);
+            check(!BridgeConfig.load(generated).flag("enabled"), "generated TOML round trip");
+            Files.writeString(generated, "[bridge]\nserver_id='custom'\n");
+            BridgeConfig.createIfMissing(generated);
+            check(BridgeConfig.load(generated).text("server_id").equals("custom"), "existing config preserved");
+        } finally { Files.deleteIfExists(generated); Files.delete(configDirectory); }
+        UUID player = UUID.randomUUID();
+        BridgeConfig white = config("[bridge.chat.game_to_external]\nfilter_mode='whitelist'\nplayer_names=['Steve']\n");
+        check(white.allowsPlayer("chat.game_to_external", player, "STEVE"), "case insensitive whitelist");
+        check(!white.allowsPlayer("chat.game_to_external", player, "Steve123"), "no substring whitelist");
+        BridgeConfig empty = config("[bridge.chat.external_to_game]\nfilter_mode='whitelist'\n");
+        check(!empty.allowsSender("qq:2"), "empty whitelist denies");
+        try { config("[bridge.presence]\nfilter_mode='wrong'\n"); throw new AssertionError("invalid mode accepted"); }
+        catch (IllegalArgumentException expected) { checks++; }
+        try { config("[bridge]\nincoming_format='{invalid}'\n"); throw new AssertionError("invalid template accepted"); }
+        catch (IllegalArgumentException expected) { checks++; }
+        sockets();
+        filteringAndLimits();
+        System.out.println("Bridge regression checks passed: " + checks);
+    }
+    private static void sockets() throws Exception {
+        try (ServerSocket listener = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            listener.setSoTimeout(10000);
+            BridgeConfig enabled = config("[bridge]\nenabled=true\nurl='ws://127.0.0.1:" + listener.getLocalPort()
+                    + "/rabbitcore'\ntoken='test-token'\n");
+            try (BridgeConnection bridge = new BridgeConnection(enabled, "test"); Peer peer = new Peer(listener.accept())) {
+                JsonObject hello = peer.json(); check(hello.get("type").getAsString().equals("hello"), "hello first");
+                check(peer.headers.contains("Authorization: Bearer test-token"), "request authentication");
+                peer.send(BridgeProtocol.message("rabbit-house", "chat.external", external("before ready")).toString());
+                check(peer.json().getAsJsonObject("data").get("code").getAsString().equals("NOT_READY"), "chat before handshake rejected");
+                JsonObject ready = new JsonObject(); ready.addProperty("reply_to", hello.get("id").getAsString());
+                peer.send(BridgeProtocol.message("rabbit-house", "ready", ready).toString());
+                await(bridge::ready); check(bridge.ready(), "ready handshake");
+                JsonObject chat = BridgeProtocol.message("rabbit-house", "chat.external", external("Steve你好"));
+                String text = chat.toString(); int split = text.indexOf("Steve");
+                peer.frame(1, false, text.substring(0, split).getBytes(StandardCharsets.UTF_8));
+                peer.frame(0, true, text.substring(split).getBytes(StandardCharsets.UTF_8));
+                await(() -> bridge.received.sum() == 1);
+                BridgeConnection.Incoming incoming = bridge.poll();
+                check(incoming != null && incoming.message().text().equals("Steve你好"), "fragment reassembly");
+                peer.send(text);
+                JsonObject second = BridgeProtocol.message("rabbit-house", "chat.external", external("next"));
+                peer.send(second.toString()); await(() -> bridge.received.sum() == 2);
+                check(bridge.poll() != null && bridge.poll() == null, "duplicate not broadcast");
+                UUID player = UUID.randomUUID();
+                bridge.send("chat.game", player, "Steve", external("outgoing"));
+                check(peer.json().get("type").getAsString().equals("chat.game"), "outbound chat");
+                await(() -> bridge.sent.sum() == 1);
+                Thread.sleep(1050); // Error responses are deliberately limited to one per second.
+                peer.send(BridgeProtocol.message("rabbit-house", "ready", ready).toString());
+                check(peer.json().getAsJsonObject("data").get("code").getAsString().equals("INVALID_MESSAGE"), "duplicate ready rejected");
+                bridge.reconnect();
+                try (Peer replacement = new Peer(listener.accept())) {
+                    JsonObject newHello = replacement.json();
+                    ready.addProperty("reply_to", newHello.get("id").getAsString());
+                    replacement.send(BridgeProtocol.message("rabbit-house", "ready", ready).toString()); await(bridge::ready);
+                    check(!bridge.current(incoming.generation()), "old generation rejected");
+                    replacement.send(text);
+                    replacement.send(BridgeProtocol.message("rabbit-house", "chat.external", external("after reconnect")).toString());
+                    await(() -> bridge.received.sum() == 3);
+                    check(bridge.poll() != null && bridge.poll() == null, "dedup survives reconnect");
+                    replacement.frame(2, true, new byte[]{1});
+                    Frame close = replacement.read(); check(close.opcode == 8 && close.payload.length >= 2
+                            && (((close.payload[0] & 255) << 8) | (close.payload[1] & 255)) == 4003, "binary close code");
+                }
+            }
+        }
+    }
+    private static void filteringAndLimits() throws Exception {
+        try (ServerSocket listener = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            listener.setSoTimeout(10000);
+            String base = "[bridge]\nenabled=true\nurl='ws://127.0.0.1:" + listener.getLocalPort() + "/rabbitcore'\ntoken='test-token'\n";
+            BridgeConfig limited = config(base + "[bridge.limits]\nincoming_messages_per_second=1\nincoming_burst=2\nbroadcast_queue_capacity=1\n");
+            try (BridgeConnection bridge = new BridgeConnection(limited, "test"); Peer peer = new Peer(listener.accept())) {
+                JsonObject hello = peer.json(), ready = new JsonObject(); ready.addProperty("reply_to", hello.get("id").getAsString());
+                peer.send(BridgeProtocol.message("rabbit-house", "ready", ready).toString()); await(bridge::ready);
+                for (int n = 0; n < 8; n++) peer.send(BridgeProtocol.message("rabbit-house", "chat.external", external("burst")).toString());
+                await(() -> bridge.received.sum() == 8);
+                check(bridge.queueDropped.sum() > 0 && bridge.rateDropped.sum() > 0, "bounded queue and rate limiting");
+                check(bridge.poll() != null && bridge.poll() == null, "broadcast queue bounded");
+                BridgeConfig blocked = config(base + "[bridge.chat.external_to_game]\nfilter_mode='whitelist'\n");
+                bridge.configure(blocked); await(bridge::ready);
+                Thread.sleep(1100);
+                peer.send(BridgeProtocol.message("rabbit-house", "chat.external", external("blocked")).toString());
+                await(() -> bridge.filtered.sum() == 1);
+                check(bridge.poll() == null, "sender whitelist filters before broadcast");
+                peer.send("x".repeat(32769));
+                Frame close = peer.read(); check(close.opcode == 8 && (((close.payload[0] & 255) << 8)
+                        | (close.payload[1] & 255)) == 4009, "oversized message closes connection");
+            }
+        }
+    }
+    private record Frame(int opcode, byte[] payload) {}
+    private static final class Peer implements AutoCloseable {
+        final Socket socket;
+        final InputStream input;
+        final OutputStream output;
+        final String headers;
+        Peer(Socket socket) throws Exception {
+            this.socket = socket; socket.setSoTimeout(10000); input = socket.getInputStream(); output = socket.getOutputStream();
+            ByteArrayOutputStream header = new ByteArrayOutputStream();
+            while (true) {
+                int value = input.read(); if (value < 0) throw new EOFException(); header.write(value);
+                String text = header.toString(StandardCharsets.US_ASCII);
+                if (text.endsWith("\r\n\r\n")) { headers = text; break; }
+            }
+            String key = Arrays.stream(headers.split("\r\n")).filter(s -> s.toLowerCase(Locale.ROOT).startsWith("sec-websocket-key:"))
+                    .findFirst().orElseThrow().split(":", 2)[1].strip();
+            String accept = Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-1")
+                    .digest((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").getBytes(StandardCharsets.US_ASCII)));
+            output.write(("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "
+                    + accept + "\r\n\r\n").getBytes(StandardCharsets.US_ASCII)); output.flush();
+        }
+        void send(String text) throws IOException { frame(1, true, text.getBytes(StandardCharsets.UTF_8)); }
+        void frame(int opcode, boolean last, byte[] payload) throws IOException {
+            output.write((last ? 128 : 0) | opcode);
+            if (payload.length < 126) output.write(payload.length);
+            else { output.write(126); output.write(payload.length >> 8); output.write(payload.length & 255); }
+            output.write(payload); output.flush();
+        }
+        Frame read() throws IOException {
+            int first = input.read(), second = input.read(); if (first < 0 || second < 0) throw new EOFException();
+            int length = second & 127;
+            if (length == 126) length = (input.read() << 8) | input.read();
+            if (length == 127) throw new IOException("Unexpected large frame");
+            byte[] mask = (second & 128) != 0 ? input.readNBytes(4) : null;
+            byte[] payload = input.readNBytes(length); if (payload.length != length) throw new EOFException();
+            if (mask != null) for (int i = 0; i < payload.length; i++) payload[i] ^= mask[i % 4];
+            if ((first & 15) == 9) { frame(10, true, payload); return read(); }
+            return new Frame(first & 15, payload);
+        }
+        JsonObject json() throws IOException {
+            Frame frame = read(); check(frame.opcode == 1, "text response");
+            return JsonParser.parseString(new String(frame.payload, StandardCharsets.UTF_8)).getAsJsonObject();
+        }
+        @Override public void close() throws IOException { socket.close(); }
+    }
+}
