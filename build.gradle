@@ -181,3 +181,22 @@ tasks.named('jar', Jar).configure {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
 }
+
+// Standalone protocol/socket regression suite; no additional test dependency needed.
+tasks.register('bridgeTest', JavaExec) {
+    dependsOn testClasses
+    // This suite uses protocol classes directly, without launching Forge's runtime loader.
+    classpath = sourceSets.test.output + sourceSets.main.output + configurations.testCompileClasspath
+    mainClass = 'com.tr4nce.rabbitcore.bridge.BridgeRegressionTest'
+    workingDir = layout.buildDirectory.dir('bridge-test').get().asFile
+    systemProperty 'jdk.net.unixdomain.tmpdir', layout.buildDirectory.dir('tmp/java').get().asFile.absolutePath
+    doFirst {
+        layout.buildDirectory.dir('tmp/java').get().asFile.mkdirs()
+        workingDir.mkdirs()
+    }
+}
+tasks.named('check') { dependsOn 'bridgeTest' }
+tasks.named('test') {
+    // No Forge runtime bootstrap is needed by these standalone tests.
+    classpath = sourceSets.test.output + sourceSets.main.output + configurations.testCompileClasspath
+}
