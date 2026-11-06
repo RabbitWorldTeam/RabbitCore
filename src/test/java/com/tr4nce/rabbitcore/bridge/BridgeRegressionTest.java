@@ -43,6 +43,15 @@ public final class BridgeRegressionTest {
         }
     }
     public static void main(String[] args) throws Exception {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        check(DeathText.render(net.minecraft.network.chat.Component.translatable("death.attack.mob", "Steve",
+                net.minecraft.network.chat.Component.translatable("entity.minecraft.zombie"))).equals("Steve被僵尸杀死了"),
+                "vanilla Chinese death message with translated attacker");
+        check(DeathText.render(net.minecraft.network.chat.Component.translatable("death.fell.accident.generic", "Steve"))
+                .equals("Steve从高处摔了下来"), "vanilla Chinese environmental death");
+        check(DeathText.render(net.minecraft.network.chat.Component.translatable("death.attack.player.item", "Steve", "Alex",
+                net.minecraft.network.chat.Component.literal("[霜刃]"))).equals("Steve被Alex用[霜刃]杀死了"),
+                "vanilla Chinese death message preserves custom weapon name");
         check(BridgeProtocol.tokens("Steve @STEVE Steve你好 Steve123 mySteve Steve_").equals(
                 Set.of("steve", "steve123", "mysteve", "steve_")), "full game IDs without @");
         check(BridgeProtocol.clean("§c红色\n&atext\u0000", false).equals("红色 &atext"), "literal text cleaning");
@@ -54,7 +63,7 @@ public final class BridgeRegressionTest {
         UUID preferenceId = UUID.randomUUID();
         check(preferences.sound(preferenceId) && preferences.receive(preferenceId), "personal defaults enabled");
         preferences.set(preferenceId, true, false); preferences.set(preferenceId, false, false);
-        BridgePreferencesData loaded = BridgePreferencesData.load(preferences.save(new CompoundTag()));
+        BridgePreferencesData loaded = BridgePreferencesData.load(preferences.save(new CompoundTag(), null), null);
         check(!loaded.sound(preferenceId) && !loaded.receive(preferenceId), "preferences survive NBT round trip");
         loaded.set(preferenceId, true, true);
         check(loaded.sound(preferenceId) && !loaded.receive(preferenceId), "personal switches independent");
@@ -86,6 +95,9 @@ public final class BridgeRegressionTest {
         check(!white.allowsPlayer("chat.game_to_external", player, "Steve123"), "no substring whitelist");
         BridgeConfig empty = config("[bridge.chat.external_to_game]\nfilter_mode='whitelist'\n");
         check(!empty.allowsSender("qq:2"), "empty whitelist denies");
+        BridgeConfig death = config("[bridge.death]\nfilter_mode='blacklist'\nplayer_uuids=['" + player + "']\nformat='[死亡] {reason}'\n");
+        check(!death.allowsPlayer("death", player, "Steve") && death.allowsPlayer("presence", player, "Steve"),
+                "death blacklist is independent of presence");
         try { config("[bridge.presence]\nfilter_mode='wrong'\n"); throw new AssertionError("invalid mode accepted"); }
         catch (IllegalArgumentException expected) { checks++; }
         try { config("[bridge]\nincoming_format='{invalid}'\n"); throw new AssertionError("invalid template accepted"); }
@@ -122,6 +134,14 @@ public final class BridgeRegressionTest {
                 bridge.send("chat.game", player, "Steve", external("outgoing"));
                 check(peer.json().get("type").getAsString().equals("chat.game"), "outbound chat");
                 await(() -> bridge.sent.sum() == 1);
+                JsonObject death = new JsonObject();
+                death.addProperty("reason", "Steve fell from a high place");
+                death.addProperty("text", "[死亡] Steve fell from a high place");
+                bridge.send("player.death", player, "Steve", death);
+                JsonObject deathMessage = peer.json();
+                check(deathMessage.get("type").getAsString().equals("player.death")
+                        && deathMessage.getAsJsonObject("data").get("reason").getAsString().contains("fell"),
+                        "death uses independent event with plain reason");
                 Thread.sleep(1050); // Error responses are deliberately limited to one per second.
                 peer.send(BridgeProtocol.message("rabbit-house", "ready", ready).toString());
                 check(peer.json().getAsJsonObject("data").get("code").getAsString().equals("INVALID_MESSAGE"), "duplicate ready rejected");

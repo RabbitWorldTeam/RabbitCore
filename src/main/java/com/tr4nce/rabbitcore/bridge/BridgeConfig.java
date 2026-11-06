@@ -35,7 +35,7 @@ public final class BridgeConfig {
         for (String[] pair : new String[][]{{"source", "gold"}, {"sender", "aqua"},
                 {"separator", "gray"}, {"message", "white"}, {"mention", "yellow"}})
             DEFAULTS.put("colors." + pair[0], pair[1]);
-        for (String prefix : List.of("chat.game_to_external", "chat.external_to_game", "presence")) {
+        for (String prefix : List.of("chat.game_to_external", "chat.external_to_game", "presence", "death")) {
             DEFAULTS.put(prefix + ".filter_mode", "all");
             if (prefix.equals("chat.external_to_game")) DEFAULTS.put(prefix + ".sender_ids", List.of());
             else {
@@ -54,6 +54,8 @@ public final class BridgeConfig {
         DEFAULTS.put("presence.leave_enabled", true);
         DEFAULTS.put("presence.join_format", "{player}进入服务器");
         DEFAULTS.put("presence.leave_format", "{player}退出服务器");
+        DEFAULTS.put("death.enabled", true);
+        DEFAULTS.put("death.format", "{reason}");
     }
 
     private final Map<String, Object> values;
@@ -116,7 +118,7 @@ public final class BridgeConfig {
         config.range("limits.incoming_burst", 1, 1000, true);
         config.range("limits.outgoing_queue_capacity", 1, 4096, true);
         config.range("limits.broadcast_queue_capacity", 1, 4096, true);
-        for (String prefix : List.of("chat.game_to_external", "chat.external_to_game", "presence")) {
+        for (String prefix : List.of("chat.game_to_external", "chat.external_to_game", "presence", "death")) {
             require(Set.of("all", "blacklist", "whitelist").contains(config.text(prefix + ".filter_mode")), prefix + ".filter_mode");
             if (prefix.equals("chat.external_to_game")) {
                 for (String id : config.list(prefix + ".sender_ids"))
@@ -133,6 +135,7 @@ public final class BridgeConfig {
         template(config.text("incoming_format"), Set.of("source", "sender", "message"));
         template(config.text("presence.join_format"), Set.of("player"));
         template(config.text("presence.leave_format"), Set.of("player"));
+        template(config.text("death.format"), Set.of("player", "reason"));
         return config;
     }
 
