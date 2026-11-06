@@ -140,6 +140,8 @@ public final class BridgeConnection implements AutoCloseable {
     private boolean allows(Outgoing entry) {
         if (entry.type.equals("chat.game")) return config.flag("game_to_external")
                 && config.allowsPlayer("chat.game_to_external", entry.player, entry.name);
+        if (entry.type.equals("player.death")) return config.flag("death.enabled")
+                && config.allowsPlayer("death", entry.player, entry.name);
         boolean join = entry.type.equals("player.join");
         return config.flag("presence.enabled") && config.flag(join ? "presence.join_enabled" : "presence.leave_enabled")
                 && config.allowsPlayer("presence", entry.player, entry.name);
@@ -163,8 +165,8 @@ public final class BridgeConnection implements AutoCloseable {
         socket = ws; state = "WAITING_READY";
         deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         JsonObject data = new JsonObject();
-        data.addProperty("mod_version", modVersion); data.addProperty("minecraft_version", "1.20.1");
-        data.add("capabilities", BridgeProtocol.GSON.toJsonTree(List.of("chat.send", "chat.receive", "chat.mentions", "player.presence")));
+        data.addProperty("mod_version", modVersion); data.addProperty("minecraft_version", net.minecraft.SharedConstants.getCurrentVersion().getName());
+        data.add("capabilities", BridgeProtocol.GSON.toJsonTree(List.of("chat.send", "chat.receive", "chat.mentions", "player.presence", "player.death")));
         JsonObject root = BridgeProtocol.message(config.text("server_id"), "hello", data);
         hello = UUID.fromString(root.get("id").getAsString());
         control(root, session, null);

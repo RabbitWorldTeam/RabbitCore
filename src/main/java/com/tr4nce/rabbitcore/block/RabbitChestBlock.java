@@ -13,12 +13,13 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
+
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -89,9 +90,9 @@ public class RabbitChestBlock extends ChestBlock {
     }
 
     @Override
-    public @NotNull InteractionResult use(@NotNull BlockState state, @NotNull Level level, @NotNull BlockPos pos, @NotNull Player player, @NotNull InteractionHand hand, @NotNull BlockHitResult hit) {
+    public @NotNull InteractionResult useWithoutItem(@NotNull BlockState state, @NotNull Level level, @NotNull BlockPos pos, @NotNull Player player, @NotNull BlockHitResult hit) {
         // 先执行原版箱子的打开逻辑（打开GUI，播放动画）
-        InteractionResult result = super.use(state, level, pos, player, hand, hit);
+        InteractionResult result = super.useWithoutItem(state, level, pos, player, hit);
         // 如果在服务端且交互成功
         if (!level.isClientSide && result.consumesAction() && player instanceof ServerPlayer serverPlayer && level instanceof ServerLevel serverLevel) {
             triggerQuestCompletion(serverLevel, pos, serverPlayer);
@@ -221,12 +222,12 @@ public class RabbitChestBlock extends ChestBlock {
         long wallTime = System.currentTimeMillis();
 
         // 2. 把时间戳和基于时间的 questId 写回物品 NBT
-        CompoundTag tag = stack.getOrCreateTag();
-        tag.putLong("RabbitPlacedGameTime", gameTime);
-        tag.putLong("RabbitPlacedWallTime", wallTime);
-
         String questId = "qt_" + gameTime + "_" + wallTime;
-        tag.putString("RabbitQuestId", questId);
+        CustomData.update(DataComponents.CUSTOM_DATA, stack, tag -> {
+            tag.putLong("RabbitPlacedGameTime", gameTime);
+            tag.putLong("RabbitPlacedWallTime", wallTime);
+            tag.putString("RabbitQuestId", questId);
+        });
 
         // 3. 写入全局持久化数据
         GlobalPos gPos = GlobalPos.of(serverLevel.dimension(), pos);

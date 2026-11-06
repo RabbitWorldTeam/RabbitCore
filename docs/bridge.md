@@ -4,7 +4,7 @@ RabbitCore 主动连接 AstrBot 插件提供的 WebSocket 服务，支持双向�
 
 ## 配置
 
-服务器首次加载世界后生成 `<世界目录>/serverconfig/rabbitcore-bridge-server.toml`。配置由服务端独立读取，不通过 Forge 配置同步发送给客户端。功能默认关闭。设置 `[bridge]` 下的 `enabled = true`、完整 `url`、非空 `token` 和唯一 `server_id`，再执行 `/rabbit_bridge reload`。公网连接使用 `wss://`。不要提交含令牌的配置。
+服务器首次加载世界后生成 `<世界目录>/serverconfig/rabbitcore-bridge-server.toml`。配置由服务端独立读取，不通过 NeoForge 配置同步发送给客户端。功能默认关闭。设置 `[bridge]` 下的 `enabled = true`、完整 `url`、非空 `token` 和唯一 `server_id`，再执行 `/rabbit_bridge reload`。公网连接使用 `wss://`。不要提交含令牌的配置。
 
 连接请求头为 `Authorization: Bearer <token>`。模组发送 `hello`，插件 10 秒内回复关联 `hello.id` 的 `ready`，之后开始转发；断线自动重连，不补发断线期间消息。
 
@@ -14,11 +14,25 @@ RabbitCore 主动连接 AstrBot 插件提供的 WebSocket 服务，支持双向�
 - `bridge.chat.game_to_external`：`filter_mode`、`player_uuids`、`player_names`。
 - `bridge.chat.external_to_game`：`filter_mode`、`sender_ids`，例如 `qq:987654`。
 - `bridge.presence`：独立的上下线开关、文字模板与 UUID/账户名名单。
+- `bridge.death`：独立的死亡通知开关、文字模板与 UUID/账户名名单。
 - `bridge.colors`：来源、发送者、分隔符、正文和提及的 Minecraft 命名颜色。
 - `bridge.mentions`：提及开关、音效开关、声音 ID、音量、音高和冷却。
 - `bridge.limits`：入站令牌桶速率/容量与出站/待广播队列容量。
 
-名单模式为 `all`、`blacklist` 或 `whitelist`。空白名单拒绝全部，空黑名单允许全部。游戏账户名完整匹配并忽略大小写；外部用户 ID 精确匹配。三个名单独立，不控制登录权限。无效重载保留旧配置。
+名单模式为 `all`、`blacklist` 或 `whitelist`。空白名单拒绝全部，空黑名单允许全部。游戏账户名完整匹配并忽略大小写；外部用户 ID 精确匹配。各名单独立，不控制登录权限。无效重载保留旧配置。
+
+死亡通知使用独立的 `player.death` 事件，AstrBot 适配端需将其 `data.text` 转发到目标群。它不依赖聊天和上下线通知开关，也不改变原版游戏内死亡消息。示例配置：
+
+```toml
+[bridge.death]
+enabled = true
+format = "[死亡] {reason}"
+filter_mode = "blacklist"
+player_uuids = []
+player_names = ["BotAccount"]
+```
+
+`{reason}` 是游戏生成的完整死亡文本，使用原版简体中文翻译，例如「Steve 被僵尸杀死了」或「Steve 从高处摔了下来」。模组自定义死因没有对应翻译时保留服务端原文。`{player}` 是账户名。默认模板为 `{reason}`，默认名单模式为 `all`。
 
 外部正文中完整出现在线游戏 ID 即可提示，无需 `@`。例如 Steve 在线时，`Steve你好` 可识别，`Steve123` 不会误匹配。提示音仅发送给被提及且开启接收与音效的玩家，默认每人冷却 3 秒。外部内容按纯文本显示，不执行命令。
 

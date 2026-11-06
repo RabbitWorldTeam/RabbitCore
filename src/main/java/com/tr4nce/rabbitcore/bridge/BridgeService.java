@@ -8,7 +8,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.*;
 import net.minecraft.world.level.storage.LevelResource;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.slf4j.LoggerFactory;
 import java.nio.file.Path;
 import java.util.*;
@@ -47,10 +47,10 @@ public final class BridgeService implements AutoCloseable {
         }
     }
     private void resolveSound() {
-        sound = ForgeRegistries.SOUND_EVENTS.getValue(ResourceLocation.tryParse(config.text("mentions.sound")));
+        sound = BuiltInRegistries.SOUND_EVENT.get(ResourceLocation.tryParse(config.text("mentions.sound")));
         if (sound == null) {
             LoggerFactory.getLogger("RabbitCore-Bridge").warn("Unknown bridge sound; using default");
-            sound = ForgeRegistries.SOUND_EVENTS.getValue(ResourceLocation.tryParse("minecraft:block.note_block.pling"));
+            sound = BuiltInRegistries.SOUND_EVENT.get(ResourceLocation.tryParse("minecraft:block.note_block.pling"));
         }
     }
     public String status() { return connection.status() + (configurationError == null ? "" : " | 配置错误=" + configurationError); }
@@ -81,6 +81,29 @@ public final class BridgeService implements AutoCloseable {
                 .replace("{player}", player.getGameProfile().getName()));
         connection.send(join ? "player.join" : "player.leave", player.getUUID(), player.getGameProfile().getName(), data);
     }
+    public void death(ServerPlayer player) {
+        if (!connection.ready() || !config.flag("death.enabled")) return;
+        UUID id = player.getUUID();
+        String name = player.getGameProfile().getName();
+        if (!config.allowsPlayer("death", id, name)) {
+            connection.filtered.increment();
+            return;
+        }
+        String reason = BridgeProtocol.clean(DeathText.render(player.getCombatTracker().getDeathMessage()), false).strip();
+        reason = limitDeathText(reason.isEmpty() ? name + "死亡了" : reason);
+        String text = limitDeathText(BridgeProtocol.clean(config.text("death.format")
+                .replace("{player}", name).replace("{reason}", reason), false).strip());
+        JsonObject data = new JsonObject();
+        data.add("player", player(player));
+        data.addProperty("reason", reason);
+        data.addProperty("text", text.isEmpty() ? reason : text);
+        connection.send("player.death", id, name, data);
+    }
+
+    private static String limitDeathText(String text) {
+        return text.codePointCount(0, text.length()) <= 2000 ? text : text.substring(0, text.offsetByCodePoints(0, 1999)) + "…";
+    }
+
     private static JsonObject player(ServerPlayer player) {
         JsonObject value = new JsonObject(); value.addProperty("id", player.getUUID().toString());
         value.addProperty("name", player.getGameProfile().getName()); return value;
