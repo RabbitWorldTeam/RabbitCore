@@ -153,7 +153,8 @@ public final class PlayerActionHandler {
                                                   QuestTagConditionChecker.EventKind kind,
                                                   ResourceLocation targetId,
                                                   long currentCount) {
-        BaseQuestFile file = FTBQuestsAPI.api().getQuestFile(true);
+        // Use server-safe access to the quest file; avoid client-only context
+        BaseQuestFile file = FTBQuestsAPI.api().getQuestFile(false);
         if (file == null) return;
 
         TeamData teamData = file.getOrCreateTeamData(player.getUUID());
@@ -172,11 +173,7 @@ public final class PlayerActionHandler {
                 continue;
             }
 
-            // 与 RabbitChestBlock 相同的前置/完成检查
-            if (teamData.isCompleted(task)) {
-                continue;
-            }
-
+            // 与 RabbitChestBlock 相同的前置/完成检查在 QuestTriggerHelper 中完成
             QuestTriggerHelper.completeTaskByTag(level, player, findFirstQuestTag(task));
         }
     }

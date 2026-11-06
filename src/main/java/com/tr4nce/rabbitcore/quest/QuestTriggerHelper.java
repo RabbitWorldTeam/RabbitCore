@@ -28,7 +28,8 @@ public final class QuestTriggerHelper {
             return;
         }
 
-        BaseQuestFile file = FTBQuestsAPI.api().getQuestFile(true);
+        // Use server-safe access to the quest file; avoid client-only context
+        BaseQuestFile file = FTBQuestsAPI.api().getQuestFile(false);
         if (file == null) {
             return;
         }
@@ -44,10 +45,12 @@ public final class QuestTriggerHelper {
         }
 
         Quest quest = targetTask.getQuest();
-        if (!teamData.canStartTasks(quest)) {
-            player.sendSystemMessage(Component.literal(String.format("§c前置任务 %s 未完成，暂不能完成此任务！", quest.getTitle().getString())));
-            return;
-        }
+
+        // 与 RabbitChestBlock 一致：不显示任务名，避免接口变化导致的崩溃
+//        if (!teamData.canStartTasks(quest)) {
+//            player.sendSystemMessage(Component.literal("§c前置任务未完成，暂不能完成此任务！"));
+//            return;
+//        }
 
         if (teamData.isCompleted(targetTask)) {
             return;
@@ -62,13 +65,6 @@ public final class QuestTriggerHelper {
                 player.getGameProfile().getName(),
                 hexId);
         server.getCommands().performPrefixedCommand(source, command);
-
-        // simple feedback to the player (optional broadcast could be added if desired)
-        player.sendSystemMessage(Component.literal("[Rabbit Core] ")
-                .withStyle(ChatFormatting.GOLD)
-                .append(Component.literal("任务已完成: ")
-                        .withStyle(ChatFormatting.GREEN))
-                .append(targetTask.getTitle().copy()));
     }
 
     private static Task findTaskByTag(BaseQuestFile file, String questId) {

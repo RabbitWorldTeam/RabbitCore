@@ -110,7 +110,16 @@ public class RabbitChestBlock extends ChestBlock {
 
         String questId = info.questId;
 
-        BaseQuestFile file = FTBQuestsAPI.api().getQuestFile(true);
+        // 获取服务端任务文件，避免在服务端引用客户端类
+        BaseQuestFile file;
+        try {
+            // 优先尝试基于服务端的获取方式（如果当前 FTBQuests 版本支持）
+            file = FTBQuestsAPI.api().getQuestFile(false);
+        } catch (Throwable t) {
+            // 无论何种原因拿不到任务文件，都直接返回，避免崩服
+            return;
+        }
+
         if (file == null) {
             return;
         }
@@ -126,10 +135,10 @@ public class RabbitChestBlock extends ChestBlock {
         }
 
         Quest quest = targetTask.getQuest();
-        if (!teamData.canStartTasks(quest)) {
-            player.sendSystemMessage(Component.literal(String.format("§c前置任务 %s 未完成，开启此箱子将无法完成任务！", quest.getTitle().getString())));
-            return;
-        }
+//        if (!teamData.canStartTasks(quest)) {
+//            player.sendSystemMessage(Component.literal(String.format("§c前置任务 %s 未完成，开启此箱子将无法完成任务！", quest.getTitle().getString())));
+//            return;
+//        }
 
 
         if (teamData.isCompleted(targetTask)) {
@@ -171,8 +180,7 @@ public class RabbitChestBlock extends ChestBlock {
         Component message = Component.literal("[Rabbit Core] ")
                 .withStyle(ChatFormatting.GOLD)
                 .append(player.getDisplayName().copy().withStyle(ChatFormatting.AQUA))
-                .append(Component.literal(" 找到了 ").withStyle(ChatFormatting.WHITE))
-                .append(Component.literal(questName).withStyle(ChatFormatting.GREEN));
+                .append(Component.literal(" 找到了一处宝箱 ").withStyle(ChatFormatting.WHITE));
 
         server.getPlayerList().broadcastSystemMessage(message, false);
     }
