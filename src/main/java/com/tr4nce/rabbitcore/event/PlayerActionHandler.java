@@ -58,7 +58,7 @@ public final class PlayerActionHandler {
         PlayerActionStatsData data = PlayerActionStatsData.get(level);
         data.addBlockBroken(player.getUUID(), blockId);
 
-        LOGGER.info("[PlayerAction] {} broke block {} at {} in {}", player.getGameProfile().getName(),
+        LOGGER.debug("[PlayerAction] {} broke block {} at {} in {}", player.getGameProfile().getName(),
                 blockId, pos, level.dimension().location());
 
         // FTB Quests integration: check harvest-related tasks
@@ -81,7 +81,7 @@ public final class PlayerActionHandler {
         PlayerActionStatsData data = PlayerActionStatsData.get(level);
         data.addMobKilled(player.getUUID(), mobId);
 
-        LOGGER.info("[PlayerAction] {} killed mob {} at {} in {}", player.getGameProfile().getName(),
+        LOGGER.debug("[PlayerAction] {} killed mob {} at {} in {}", player.getGameProfile().getName(),
                 mobId, victim.blockPosition(), level.dimension().location());
 
         // FTB Quests integration: check kill-related tasks
@@ -107,7 +107,7 @@ public final class PlayerActionHandler {
         data.addDamageDealt(player.getUUID(), amount);
 
         ResourceLocation mobId = ForgeRegistries.ENTITY_TYPES.getKey(mob.getType());
-        LOGGER.info("[PlayerAction] {} damaged mob {} for {} at {} in {}", player.getGameProfile().getName(),
+        LOGGER.debug("[PlayerAction] {} damaged mob {} for {} at {} in {}", player.getGameProfile().getName(),
                 mobId, amount, victim.blockPosition(), level.dimension().location());
 
         // FTB Quests integration: check damage-related tasks
