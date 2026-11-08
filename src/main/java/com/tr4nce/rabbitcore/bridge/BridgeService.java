@@ -109,6 +109,21 @@ public final class BridgeService implements AutoCloseable {
         value.addProperty("name", player.getGameProfile().getName()); return value;
     }
     public void tick() {
+        for (int n = 0; n < 4; n++) {
+            var incoming = connection.pollAdmin();
+            if (incoming == null) break;
+            if (!connection.current(incoming.generation())) continue;
+            if (!config.allowsWhitelistAdmin(incoming.request())) {
+                connection.adminResult(incoming, Map.of("ok", false, "code", "FORBIDDEN", "message", "管理授权已撤销")); continue;
+            }
+            if (!BridgeAdmin.fresh(incoming.timestamp(), System.currentTimeMillis())) {
+                connection.adminResult(incoming, Map.of("ok", false, "code", "EXPIRED_REQUEST", "message", "请求已过期")); continue;
+            }
+            RabbitAuthIntegration.execute(incoming.request(), incoming.timestamp() + 30000).whenComplete((result, failure) -> server.execute(() -> {
+                connection.adminResult(incoming, failure == null ? result
+                        : Map.of("ok", false, "code", "AUTH_UNAVAILABLE", "message", "RabbitAuth 白名单服务不可用"));
+            }));
+        }
         // A per-tick budget prevents large configured queues monopolizing a tick.
         for (int n = 0; n < 20; n++) {
             BridgeConnection.Incoming incoming = connection.poll();

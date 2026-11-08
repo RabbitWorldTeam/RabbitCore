@@ -27,6 +27,10 @@ public final class BridgeConfig {
         DEFAULTS.put("server_id", "rabbit-house");
         DEFAULTS.put("game_to_external", true);
         DEFAULTS.put("external_to_game", true);
+        DEFAULTS.put("admin.whitelist.enabled", false);
+        DEFAULTS.put("admin.whitelist.source_ids", List.of());
+        DEFAULTS.put("admin.whitelist.sender_ids", List.of());
+        DEFAULTS.put("admin.whitelist.actions", List.of("add", "remove", "set", "info", "list", "status"));
         DEFAULTS.put("incoming_format", "[{source}] {sender}：{message}");
         DEFAULTS.put("limits.incoming_messages_per_second", 10);
         DEFAULTS.put("limits.incoming_burst", 20);
@@ -136,6 +140,10 @@ public final class BridgeConfig {
         template(config.text("presence.join_format"), Set.of("player"));
         template(config.text("presence.leave_format"), Set.of("player"));
         template(config.text("death.format"), Set.of("player", "reason"));
+        for (String key : List.of("admin.whitelist.source_ids", "admin.whitelist.sender_ids"))
+            for (String id : config.list(key)) require(!id.isBlank() && id.length() <= 128 && !id.chars().anyMatch(Character::isISOControl), key);
+        for (String action : config.list("admin.whitelist.actions"))
+            require(Set.of("add", "remove", "set", "info", "list", "status", "on", "off").contains(action), "admin.whitelist.actions");
         return config;
     }
 
@@ -163,6 +171,11 @@ public final class BridgeConfig {
     public boolean allowsPlayer(String prefix, UUID id, String name) {
         return allow(prefix, list(prefix + ".player_uuids").stream().anyMatch(s -> UUID.fromString(s).equals(id))
                 || list(prefix + ".player_names").stream().anyMatch(name::equalsIgnoreCase));
+    }
+    public boolean allowsWhitelistAdmin(BridgeAdmin.Request request) {
+        return flag("admin.whitelist.enabled") && list("admin.whitelist.source_ids").contains(request.sourceId())
+                && list("admin.whitelist.sender_ids").contains(request.senderId())
+                && list("admin.whitelist.actions").contains(request.action());
     }
     public boolean allowsSender(String id) {
         return allow("chat.external_to_game", list("chat.external_to_game.sender_ids").contains(id));
