@@ -43,6 +43,15 @@ public final class BridgeRegressionTest {
         }
     }
     public static void main(String[] args) throws Exception {
+        net.minecraft.SharedConstants.tryDetectVersion();
+        check(DeathText.render(net.minecraft.network.chat.Component.translatable("death.attack.mob", "Steve",
+                net.minecraft.network.chat.Component.translatable("entity.minecraft.zombie"))).equals("Steve被僵尸杀死了"),
+                "vanilla Chinese death message with translated attacker");
+        check(DeathText.render(net.minecraft.network.chat.Component.translatable("death.fell.accident.generic", "Steve"))
+                .equals("Steve从高处摔了下来"), "vanilla Chinese environmental death");
+        check(DeathText.render(net.minecraft.network.chat.Component.translatable("death.attack.player.item", "Steve", "Alex",
+                net.minecraft.network.chat.Component.literal("[霜刃]"))).equals("Steve被Alex用[霜刃]杀死了"),
+                "vanilla Chinese death message preserves custom weapon name");
         check(BridgeProtocol.tokens("Steve @STEVE Steve你好 Steve123 mySteve Steve_").equals(
                 Set.of("steve", "steve123", "mysteve", "steve_")), "full game IDs without @");
         check(BridgeProtocol.clean("§c红色\n&atext\u0000", false).equals("红色 &atext"), "literal text cleaning");
@@ -54,7 +63,7 @@ public final class BridgeRegressionTest {
         UUID preferenceId = UUID.randomUUID();
         check(preferences.sound(preferenceId) && preferences.receive(preferenceId), "personal defaults enabled");
         preferences.set(preferenceId, true, false); preferences.set(preferenceId, false, false);
-        BridgePreferencesData loaded = BridgePreferencesData.load(preferences.save(new CompoundTag()));
+        BridgePreferencesData loaded = BridgePreferencesData.load(preferences.save(new CompoundTag(), null), null);
         check(!loaded.sound(preferenceId) && !loaded.receive(preferenceId), "preferences survive NBT round trip");
         loaded.set(preferenceId, true, true);
         check(loaded.sound(preferenceId) && !loaded.receive(preferenceId), "personal switches independent");
@@ -86,14 +95,91 @@ public final class BridgeRegressionTest {
         check(!white.allowsPlayer("chat.game_to_external", player, "Steve123"), "no substring whitelist");
         BridgeConfig empty = config("[bridge.chat.external_to_game]\nfilter_mode='whitelist'\n");
         check(!empty.allowsSender("qq:2"), "empty whitelist denies");
+        BridgeConfig death = config("[bridge.death]\nfilter_mode='blacklist'\nplayer_uuids=['" + player + "']\nformat='[死亡] {reason}'\n");
+        check(!death.allowsPlayer("death", player, "Steve") && death.allowsPlayer("presence", player, "Steve"),
+                "death blacklist is independent of presence");
         try { config("[bridge.presence]\nfilter_mode='wrong'\n"); throw new AssertionError("invalid mode accepted"); }
         catch (IllegalArgumentException expected) { checks++; }
         try { config("[bridge]\nincoming_format='{invalid}'\n"); throw new AssertionError("invalid template accepted"); }
         catch (IllegalArgumentException expected) { checks++; }
+        whitelistAdmin();
         sockets();
         filteringAndLimits();
         System.out.println("Bridge regression checks passed: " + checks);
     }
+
+    private static void whitelistAdmin() throws Exception {
+        var add = BridgeAdmin.text(external("白名单 添加 Steve"), "白名单 添加 Steve");
+        check(add.action().equals("add") && add.name().equals("Steve"), "group whitelist text parses strict action");
+        invalid(() -> BridgeAdmin.text(external("x"), "白名单 添加 Steve extra"), "INVALID_MESSAGE");
+        invalid(() -> BridgeAdmin.text(external("x"), "白名单 添加 Steve;op"), "INVALID_MESSAGE");
+        check(!BridgeConfig.disabled().allowsWhitelistAdmin(add), "group administration disabled by default");
+        check(BridgeAdmin.fresh(100000, 100000) && !BridgeAdmin.fresh(1, 100000), "administrative timestamp window");
+        check(RabbitAuthIntegration.execute(add, System.currentTimeMillis() + 30000).toCompletableFuture().get()
+                .get("code").equals("AUTH_UNAVAILABLE"), "RabbitCore operates without RabbitAuth installed");
+        try (ServerSocket listener = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
+            listener.setSoTimeout(10000);
+            String settings = "[bridge]\nenabled=true\nexternal_to_game=false\nurl='ws://127.0.0.1:" + listener.getLocalPort()
+                    + "/rabbitcore'\ntoken='test-token'\n[bridge.presence]\nenabled=false\n"
+                    + "[bridge.admin.whitelist]\nenabled=true\nsource_ids=['qq:group:1']\nsender_ids=['qq:2']\n";
+            BridgeConfig config = config(settings);
+            check(config.allowsWhitelistAdmin(add), "explicit source and account IDs authorize action");
+            check(!config.allowsWhitelistAdmin(new BridgeAdmin.Request("qq:group:1", "qq:other", "add", "Steve", true, 1)), "display names cannot replace administrator IDs");
+            check(!config.allowsWhitelistAdmin(new BridgeAdmin.Request("qq:other", "qq:2", "add", "Steve", true, 1)), "administrator cannot operate outside configured groups");
+            check(!config.allowsWhitelistAdmin(new BridgeAdmin.Request("qq:group:1", "qq:2", "on", "", true, 1)), "global switches are not granted by default");
+            try (BridgeConnection bridge = new BridgeConnection(config, "test"); Peer peer = new Peer(listener.accept())) {
+                JsonObject hello = peer.json(), ready = new JsonObject();
+                ready.addProperty("reply_to", hello.get("id").getAsString());
+                peer.send(BridgeProtocol.message("rabbit-house", "ready", ready).toString()); await(bridge::ready);
+                JsonObject request = external(""); request.addProperty("action", "add"); request.addProperty("name", "Steve");
+                request.getAsJsonObject("sender").addProperty("id", "qq:other");
+                peer.send(BridgeProtocol.message("rabbit-house", "admin.whitelist", request).toString());
+                check(peer.json().getAsJsonObject("data").get("code").getAsString().equals("FORBIDDEN") && bridge.pollAdmin() == null, "unauthorized wire request never reaches game");
+                request.getAsJsonObject("sender").addProperty("id", "qq:2");
+                JsonObject stale = BridgeProtocol.message("rabbit-house", "admin.whitelist", request);
+                stale.addProperty("timestamp", System.currentTimeMillis() - 31000);
+                peer.send(stale.toString());
+                check(peer.json().getAsJsonObject("data").get("code").getAsString().equals("EXPIRED_REQUEST"), "expired wire request rejected");
+                JsonObject valid = BridgeProtocol.message("rabbit-house", "admin.whitelist", request);
+                peer.send(valid.toString());
+                var captured = new java.util.concurrent.atomic.AtomicReference<BridgeConnection.AdminIncoming>();
+                await(() -> { var value = bridge.pollAdmin(); if (value != null) captured.set(value); return captured.get() != null; });
+                check(captured.get().request().name().equals("Steve") && bridge.poll() == null, "admin queue independent of chat forwarding and filters");
+                bridge.adminResult(captured.get(), Map.of("ok", true, "code", "OK", "message", "done"));
+                JsonObject result = peer.json();
+                check(result.get("type").getAsString().equals("admin.whitelist.result")
+                        && result.getAsJsonObject("data").get("reply_to").equals(valid.get("id"))
+                        && result.getAsJsonObject("data").get("source_id").getAsString().equals("qq:group:1"),
+                        "result correlated and directed to original group despite presence disabled");
+                peer.send(valid.toString());
+                check(peer.json().getAsJsonObject("data").get("code").getAsString().equals("DUPLICATE_REQUEST")
+                        && bridge.pollAdmin() == null, "duplicate admin request never executes twice");
+                peer.send(BridgeProtocol.message("rabbit-house", "chat.external", external("白名单 暂停 Steve")).toString());
+                captured.set(null);
+                await(() -> { var value = bridge.pollAdmin(); if (value != null) captured.set(value); return captured.get() != null; });
+                check(captured.get().request().action().equals("set") && !captured.get().request().enabled() && bridge.poll() == null,
+                        "legacy chat forwarding supports strict whitelist state command without broadcast");
+                bridge.configure(config(settings.replace("sender_ids=['qq:2']", "sender_ids=[]"))); await(bridge::ready);
+                long filtered = bridge.filtered.sum();
+                bridge.adminResult(captured.get(), Map.of("ok", true, "code", "OK", "message", "private result"));
+                await(() -> bridge.filtered.sum() > filtered);
+                check(true, "authorization revocation suppresses queued sensitive success replies");
+                bridge.configure(config(settings.replace("[bridge.admin.whitelist]\nenabled=true", "[bridge.admin.whitelist]\nenabled=false")));
+                try (Peer disabledPeer = new Peer(listener.accept())) {
+                    JsonObject disabledHello = disabledPeer.json();
+                    ready.addProperty("reply_to", disabledHello.get("id").getAsString());
+                    disabledPeer.send(BridgeProtocol.message("rabbit-house", "ready", ready).toString()); await(bridge::ready);
+                    // Chat forwarding is explicitly enabled for the compatibility check.
+                    bridge.configure(config(settings.replace("external_to_game=false", "external_to_game=true")
+                            .replace("[bridge.admin.whitelist]\nenabled=true", "[bridge.admin.whitelist]\nenabled=false"))); await(bridge::ready);
+                    disabledPeer.send(BridgeProtocol.message("rabbit-house", "chat.external", external("白名单 查询 Steve")).toString());
+                    await(() -> bridge.received.sum() == 1);
+                    check(bridge.poll() != null && bridge.pollAdmin() == null, "disabled administration preserves legacy chat routing");
+                }
+            }
+        }
+    }
+
     private static void sockets() throws Exception {
         try (ServerSocket listener = new ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))) {
             listener.setSoTimeout(10000);
@@ -122,6 +208,14 @@ public final class BridgeRegressionTest {
                 bridge.send("chat.game", player, "Steve", external("outgoing"));
                 check(peer.json().get("type").getAsString().equals("chat.game"), "outbound chat");
                 await(() -> bridge.sent.sum() == 1);
+                JsonObject death = new JsonObject();
+                death.addProperty("reason", "Steve fell from a high place");
+                death.addProperty("text", "[死亡] Steve fell from a high place");
+                bridge.send("player.death", player, "Steve", death);
+                JsonObject deathMessage = peer.json();
+                check(deathMessage.get("type").getAsString().equals("player.death")
+                        && deathMessage.getAsJsonObject("data").get("reason").getAsString().contains("fell"),
+                        "death uses independent event with plain reason");
                 Thread.sleep(1050); // Error responses are deliberately limited to one per second.
                 peer.send(BridgeProtocol.message("rabbit-house", "ready", ready).toString());
                 check(peer.json().getAsJsonObject("data").get("code").getAsString().equals("INVALID_MESSAGE"), "duplicate ready rejected");

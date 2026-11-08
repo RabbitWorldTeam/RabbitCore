@@ -2,6 +2,7 @@ package com.tr4nce.rabbitcore.world.storage;
 
 import net.minecraft.nbt.*;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.world.level.saveddata.SavedData;
 import java.util.*;
 
@@ -9,8 +10,7 @@ import java.util.*;
 public final class BridgePreferencesData extends SavedData {
     private final Set<UUID> muted = new HashSet<>(), hidden = new HashSet<>();
     public static BridgePreferencesData get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(BridgePreferencesData::load,
-                BridgePreferencesData::new, "rabbit_bridge_preferences");
+        return server.overworld().getDataStorage().computeIfAbsent(new SavedData.Factory<>(BridgePreferencesData::new, BridgePreferencesData::load, null), "rabbit_bridge_preferences");
     }
     public boolean sound(UUID id) { return !muted.contains(id); }
     public boolean receive(UUID id) { return !hidden.contains(id); }
@@ -19,7 +19,7 @@ public final class BridgePreferencesData extends SavedData {
         if (enabled) target.remove(id); else target.add(id);
         setDirty();
     }
-    public static BridgePreferencesData load(CompoundTag tag) {
+    public static BridgePreferencesData load(CompoundTag tag, HolderLookup.Provider registries) {
         BridgePreferencesData data = new BridgePreferencesData();
         read(tag, "muted", data.muted); read(tag, "hidden", data.hidden); return data;
     }
@@ -28,7 +28,7 @@ public final class BridgePreferencesData extends SavedData {
             try { output.add(UUID.fromString(item.getAsString())); } catch (IllegalArgumentException ignored) { }
         }
     }
-    @Override public CompoundTag save(CompoundTag tag) {
+    @Override public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         write(tag, "muted", muted); write(tag, "hidden", hidden); return tag;
     }
     private static void write(CompoundTag tag, String key, Set<UUID> values) {

@@ -4,14 +4,16 @@ import com.tr4nce.rabbitcore.Rabbitcore;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.*;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.server.*;
-import net.minecraftforge.eventbus.api.*;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.neoforge.event.*;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.*;
+import net.neoforged.bus.api.*;
+import net.neoforged.fml.ModList;
+import net.neoforged.fml.common.EventBusSubscriber;
 
-@Mod.EventBusSubscriber(modid = Rabbitcore.MODID)
+@EventBusSubscriber(modid = Rabbitcore.MODID)
 public final class BridgeEvents {
     private static BridgeService service;
     private BridgeEvents() {}
@@ -22,8 +24,8 @@ public final class BridgeEvents {
     @SubscribeEvent public static void stopping(ServerStoppingEvent event) {
         if (service != null) { service.close(); service = null; }
     }
-    @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event) {
-        if (event.phase == TickEvent.Phase.END && service != null) service.tick();
+    @SubscribeEvent public static void tick(ServerTickEvent.Post event) {
+        if (service != null) service.tick();
     }
     @SubscribeEvent(priority = EventPriority.LOWEST) public static void chat(ServerChatEvent event) {
         if (!event.isCanceled() && service != null) service.gameChat(event.getPlayer(), event.getMessage().getString());
@@ -33,6 +35,11 @@ public final class BridgeEvents {
     }
     @SubscribeEvent public static void left(PlayerEvent.PlayerLoggedOutEvent event) {
         if (service != null && event.getEntity() instanceof ServerPlayer player) service.presence(player, false);
+    }
+    @SubscribeEvent(priority = EventPriority.LOWEST) public static void died(LivingDeathEvent event) {
+        if (!event.isCanceled() && service != null && event.getEntity() instanceof ServerPlayer player) {
+            service.death(player);
+        }
     }
     @SubscribeEvent public static void commands(RegisterCommandsEvent event) {
         var root = Commands.literal("rabbit_bridge");

@@ -41,6 +41,47 @@ public final class BridgeConnection implements AutoCloseable {
     private final LinkedHashMap<UUID, Long> seen = new LinkedHashMap<>();
     private final Queue<Outgoing> outgoing = new ArrayDeque<>();
     private final Queue<Incoming> incoming = new ArrayDeque<>();
+    private final Queue<AdminIncoming> admins = new ArrayDeque<>();
+    private final LinkedHashMap<UUID, Long> adminSeen = new LinkedHashMap<>();
+    public record AdminIncoming(long generation, UUID id, long timestamp, BridgeAdmin.Request request) {}
+    public AdminIncoming pollAdmin() { synchronized (admins) { return admins.poll(); } }
+    public void adminResult(AdminIncoming incoming, Map<String, Object> result) {
+        if (!current(incoming.generation())) return;
+        JsonObject data = BridgeProtocol.GSON.toJsonTree(result).getAsJsonObject();
+        data.addProperty("reply_to", incoming.id().toString());
+        data.addProperty("source_id", incoming.request().sourceId());
+        data.addProperty("sender_id", incoming.request().senderId());
+        data.addProperty("action", incoming.request().action());
+        send("admin.whitelist.result", null, "", data);
+    }
+    private void enqueueAdmin(UUID id, long timestamp, BridgeAdmin.Request request) {
+        AdminIncoming message = new AdminIncoming(generation, id, timestamp, request);
+        if (!config.allowsWhitelistAdmin(request)) {
+            adminResult(message, Map.of("ok", false, "code", "FORBIDDEN", "message", "该群或账号未获白名单管理授权")); return;
+        }
+        if (!BridgeAdmin.fresh(timestamp, System.currentTimeMillis())) {
+            adminResult(message, Map.of("ok", false, "code", "EXPIRED_REQUEST", "message", "请求已过期")); return;
+        }
+        long now = System.nanoTime();
+        adminSeen.entrySet().removeIf(e -> now - e.getValue() >= TimeUnit.MINUTES.toNanos(5));
+        if (adminSeen.containsKey(id)) {
+            adminResult(message, Map.of("ok", false, "code", "DUPLICATE_REQUEST", "message", "重复请求未再次执行")); return;
+        }
+        tokens = Math.min(config.number("limits.incoming_burst"), tokens
+                + (now - tokenAt) / 1_000_000_000.0 * config.number("limits.incoming_messages_per_second"));
+        tokenAt = now;
+        if (tokens < 1 || adminSeen.size() >= 4096) {
+            adminResult(message, Map.of("ok", false, "code", "RATE_LIMITED", "message", "管理请求过多")); return;
+        }
+        tokens--;
+        synchronized (admins) {
+            if (admins.size() >= 64) {
+                adminResult(message, Map.of("ok", false, "code", "BUSY", "message", "管理队列已满")); return;
+            }
+            adminSeen.put(id, now);
+            admins.add(message);
+        }
+    }
     private final Queue<Control> controls = new ArrayDeque<>();
     public final LongAdder sent = new LongAdder(), received = new LongAdder(), filtered = new LongAdder();
     public final LongAdder rateDropped = new LongAdder(), queueDropped = new LongAdder();
@@ -58,7 +99,7 @@ public final class BridgeConnection implements AutoCloseable {
         execute(() -> {
             BridgeConfig old = config;
             tokens = Math.min(tokens, next.number("limits.incoming_burst"));
-            if (old.flag("enabled") != next.flag("enabled") || !old.text("url").equals(next.text("url"))
+            if (old.flag("enabled") != next.flag("enabled") || old.flag("admin.whitelist.enabled") != next.flag("admin.whitelist.enabled") || !old.text("url").equals(next.text("url"))
                     || !old.text("token").equals(next.text("token")) || !old.text("server_id").equals(next.text("server_id"))) {
                 disconnect(); retryAt = 0;
             }
@@ -138,8 +179,16 @@ public final class BridgeConnection implements AutoCloseable {
         }));
     }
     private boolean allows(Outgoing entry) {
+        if (entry.type.equals("admin.whitelist.result")) {
+            JsonObject data = BridgeProtocol.parse(entry.json).getAsJsonObject("data");
+            if (!data.get("ok").getAsBoolean()) return true;
+            return config.allowsWhitelistAdmin(new BridgeAdmin.Request(data.get("source_id").getAsString(),
+                    data.get("sender_id").getAsString(), data.get("action").getAsString(), "", true, 1));
+        }
         if (entry.type.equals("chat.game")) return config.flag("game_to_external")
                 && config.allowsPlayer("chat.game_to_external", entry.player, entry.name);
+        if (entry.type.equals("player.death")) return config.flag("death.enabled")
+                && config.allowsPlayer("death", entry.player, entry.name);
         boolean join = entry.type.equals("player.join");
         return config.flag("presence.enabled") && config.flag(join ? "presence.join_enabled" : "presence.leave_enabled")
                 && config.allowsPlayer("presence", entry.player, entry.name);
@@ -163,8 +212,10 @@ public final class BridgeConnection implements AutoCloseable {
         socket = ws; state = "WAITING_READY";
         deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         JsonObject data = new JsonObject();
-        data.addProperty("mod_version", modVersion); data.addProperty("minecraft_version", "1.20.1");
-        data.add("capabilities", BridgeProtocol.GSON.toJsonTree(List.of("chat.send", "chat.receive", "chat.mentions", "player.presence")));
+        data.addProperty("mod_version", modVersion); data.addProperty("minecraft_version", net.minecraft.SharedConstants.getCurrentVersion().getName());
+        List<String> capabilities = new ArrayList<>(List.of("chat.send", "chat.receive", "chat.mentions", "player.presence", "player.death"));
+        if (config.flag("admin.whitelist.enabled")) capabilities.add("admin.whitelist");
+        data.add("capabilities", BridgeProtocol.GSON.toJsonTree(capabilities));
         JsonObject root = BridgeProtocol.message(config.text("server_id"), "hello", data);
         hello = UUID.fromString(root.get("id").getAsString());
         control(root, session, null);
@@ -197,9 +248,15 @@ public final class BridgeConnection implements AutoCloseable {
                 pingAt = readyAt + TimeUnit.SECONDS.toNanos(30);
                 LOGGER.info("Bridge state: READY"); return;
             }
-            if (!envelope.type().equals("chat.external")) throw new BridgeProtocol.Invalid("UNSUPPORTED_TYPE", "type");
+            if (!Set.of("chat.external", "admin.whitelist").contains(envelope.type())) throw new BridgeProtocol.Invalid("UNSUPPORTED_TYPE", "type");
             if (!ready()) throw new BridgeProtocol.Invalid("NOT_READY", "handshake");
+            if (envelope.type().equals("admin.whitelist")) {
+                enqueueAdmin(id, BridgeProtocol.integer(root, "timestamp"), BridgeAdmin.structured(envelope.data())); return;
+            }
             BridgeProtocol.External external = BridgeProtocol.external(envelope.data());
+            if (config.flag("admin.whitelist.enabled") && BridgeAdmin.textCommand(external.text())) {
+                enqueueAdmin(id, BridgeProtocol.integer(root, "timestamp"), BridgeAdmin.text(envelope.data(), external.text())); return;
+            }
             long now = System.nanoTime();
             seen.entrySet().removeIf(entry -> now - entry.getValue() >= TimeUnit.MINUTES.toNanos(5));
             if (seen.containsKey(id)) return;
@@ -258,6 +315,7 @@ public final class BridgeConnection implements AutoCloseable {
         if (socket != null) { socket.abort(); socket = null; }
         synchronized (outgoing) { outgoing.clear(); }
         synchronized (incoming) { incoming.clear(); }
+        synchronized (admins) { admins.clear(); }
         controls.clear(); writing = false; pongDeadline = 0; state = "DISCONNECTED";
     }
     @Override public synchronized void close() {
