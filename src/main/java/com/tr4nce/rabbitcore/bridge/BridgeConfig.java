@@ -27,6 +27,10 @@ public final class BridgeConfig {
         DEFAULTS.put("server_id", "rabbit-house");
         DEFAULTS.put("game_to_external", true);
         DEFAULTS.put("external_to_game", true);
+        DEFAULTS.put("admin.whitelist.enabled", false);
+        DEFAULTS.put("admin.whitelist.source_ids", List.of());
+        DEFAULTS.put("admin.whitelist.sender_ids", List.of());
+        DEFAULTS.put("admin.whitelist.actions", List.of("add", "remove", "set", "info", "list", "status"));
         DEFAULTS.put("incoming_format", "[{source}] {sender}：{message}");
         DEFAULTS.put("limits.incoming_messages_per_second", 10);
         DEFAULTS.put("limits.incoming_burst", 20);
@@ -35,7 +39,7 @@ public final class BridgeConfig {
         for (String[] pair : new String[][]{{"source", "gold"}, {"sender", "aqua"},
                 {"separator", "gray"}, {"message", "white"}, {"mention", "yellow"}})
             DEFAULTS.put("colors." + pair[0], pair[1]);
-        for (String prefix : List.of("chat.game_to_external", "chat.external_to_game", "presence")) {
+        for (String prefix : List.of("chat.game_to_external", "chat.external_to_game", "presence", "death")) {
             DEFAULTS.put(prefix + ".filter_mode", "all");
             if (prefix.equals("chat.external_to_game")) DEFAULTS.put(prefix + ".sender_ids", List.of());
             else {
@@ -54,6 +58,8 @@ public final class BridgeConfig {
         DEFAULTS.put("presence.leave_enabled", true);
         DEFAULTS.put("presence.join_format", "{player}进入服务器");
         DEFAULTS.put("presence.leave_format", "{player}退出服务器");
+        DEFAULTS.put("death.enabled", true);
+        DEFAULTS.put("death.format", "{reason}");
     }
 
     private final Map<String, Object> values;
@@ -116,7 +122,7 @@ public final class BridgeConfig {
         config.range("limits.incoming_burst", 1, 1000, true);
         config.range("limits.outgoing_queue_capacity", 1, 4096, true);
         config.range("limits.broadcast_queue_capacity", 1, 4096, true);
-        for (String prefix : List.of("chat.game_to_external", "chat.external_to_game", "presence")) {
+        for (String prefix : List.of("chat.game_to_external", "chat.external_to_game", "presence", "death")) {
             require(Set.of("all", "blacklist", "whitelist").contains(config.text(prefix + ".filter_mode")), prefix + ".filter_mode");
             if (prefix.equals("chat.external_to_game")) {
                 for (String id : config.list(prefix + ".sender_ids"))
@@ -133,6 +139,11 @@ public final class BridgeConfig {
         template(config.text("incoming_format"), Set.of("source", "sender", "message"));
         template(config.text("presence.join_format"), Set.of("player"));
         template(config.text("presence.leave_format"), Set.of("player"));
+        template(config.text("death.format"), Set.of("player", "reason"));
+        for (String key : List.of("admin.whitelist.source_ids", "admin.whitelist.sender_ids"))
+            for (String id : config.list(key)) require(!id.isBlank() && id.length() <= 128 && !id.chars().anyMatch(Character::isISOControl), key);
+        for (String action : config.list("admin.whitelist.actions"))
+            require(Set.of("add", "remove", "set", "info", "list", "status", "on", "off").contains(action), "admin.whitelist.actions");
         return config;
     }
 
@@ -160,6 +171,11 @@ public final class BridgeConfig {
     public boolean allowsPlayer(String prefix, UUID id, String name) {
         return allow(prefix, list(prefix + ".player_uuids").stream().anyMatch(s -> UUID.fromString(s).equals(id))
                 || list(prefix + ".player_names").stream().anyMatch(name::equalsIgnoreCase));
+    }
+    public boolean allowsWhitelistAdmin(BridgeAdmin.Request request) {
+        return flag("admin.whitelist.enabled") && list("admin.whitelist.source_ids").contains(request.sourceId())
+                && list("admin.whitelist.sender_ids").contains(request.senderId())
+                && list("admin.whitelist.actions").contains(request.action());
     }
     public boolean allowsSender(String id) {
         return allow("chat.external_to_game", list("chat.external_to_game.sender_ids").contains(id));

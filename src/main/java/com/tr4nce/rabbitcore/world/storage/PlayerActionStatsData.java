@@ -6,6 +6,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.NotNull;
 
@@ -44,9 +45,7 @@ public class PlayerActionStatsData extends SavedData {
         ServerLevel overworld = level.getServer().getLevel(Level.OVERWORLD);
         if (overworld == null) return new PlayerActionStatsData();
 
-        return overworld.getDataStorage().computeIfAbsent(
-                PlayerActionStatsData::load,
-                PlayerActionStatsData::new,
+        return overworld.getDataStorage().computeIfAbsent(new SavedData.Factory<>(PlayerActionStatsData::new, PlayerActionStatsData::load, null),
                 "rabbit_player_action_stats"
         );
     }
@@ -108,7 +107,7 @@ public class PlayerActionStatsData extends SavedData {
         setDirty();
     }
 
-    public static PlayerActionStatsData load(CompoundTag nbt) {
+    public static PlayerActionStatsData load(CompoundTag nbt, HolderLookup.Provider registries) {
         PlayerActionStatsData data = new PlayerActionStatsData();
         ListTag list = nbt.getList("PlayerActionStats", Tag.TAG_COMPOUND);
 
@@ -176,7 +175,7 @@ public class PlayerActionStatsData extends SavedData {
     }
 
     @Override
-    public @NotNull CompoundTag save(@NotNull CompoundTag nbt) {
+    public @NotNull CompoundTag save(@NotNull CompoundTag nbt, HolderLookup.Provider registries) {
         ListTag list = new ListTag();
         statsMap.forEach((id, stats) -> {
             CompoundTag entry = new CompoundTag();

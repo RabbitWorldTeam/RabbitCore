@@ -61,7 +61,7 @@ public final class BridgeProtocol {
         if (value == null || !value.isJsonObject()) throw new Invalid("INVALID_MESSAGE", key);
         return value.getAsJsonObject();
     }
-    private static long integer(JsonObject object, String key) {
+    public static long integer(JsonObject object, String key) {
         JsonElement value = object.get(key);
         if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()
                 || !value.toString().matches("[0-9]+")) throw new Invalid("INVALID_MESSAGE", key);

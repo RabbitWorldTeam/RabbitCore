@@ -9,6 +9,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.NotNull;
 
@@ -34,9 +35,7 @@ public class ChestRegistryData extends SavedData {
         ServerLevel overworld = level.getServer().getLevel(Level.OVERWORLD);
         if (overworld == null) return new ChestRegistryData();
 
-        return overworld.getDataStorage().computeIfAbsent(
-                ChestRegistryData::load,
-                ChestRegistryData::new,
+        return overworld.getDataStorage().computeIfAbsent(new SavedData.Factory<>(ChestRegistryData::new, ChestRegistryData::load, null),
                 "rabbit_chest_registry"
         );
     }
@@ -63,7 +62,7 @@ public class ChestRegistryData extends SavedData {
     }
 
     // 反序列化：从 NBT 读回所有带 questId 的箱子
-    public static ChestRegistryData load(CompoundTag nbt) {
+    public static ChestRegistryData load(CompoundTag nbt, HolderLookup.Provider registries) {
         ChestRegistryData data = new ChestRegistryData();
         ListTag list = nbt.getList("RabbitChests", Tag.TAG_COMPOUND);
 
@@ -93,7 +92,7 @@ public class ChestRegistryData extends SavedData {
     }
 
     @Override
-    public @NotNull CompoundTag save(@NotNull CompoundTag nbt) {
+    public @NotNull CompoundTag save(@NotNull CompoundTag nbt, HolderLookup.Provider registries) {
         ListTag list = new ListTag();
         registeredChests.forEach((pos, info) -> {
             CompoundTag entry = new CompoundTag();

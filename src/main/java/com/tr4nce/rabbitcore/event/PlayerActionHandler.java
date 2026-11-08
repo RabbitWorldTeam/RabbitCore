@@ -19,13 +19,13 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.living.LivingDeathEvent;
-import net.minecraftforge.event.entity.living.LivingHurtEvent;
-import net.minecraftforge.event.level.BlockEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
@@ -36,7 +36,7 @@ import java.util.UUID;
  * Listens for player actions (block breaking, killing mobs, damaging mobs, movement)
  * and records simple statistics via {@link PlayerActionStatsData}.
  */
-@Mod.EventBusSubscriber(modid = Rabbitcore.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@EventBusSubscriber(modid = Rabbitcore.MODID)
 public final class PlayerActionHandler {
 
     private static final Map<UUID, Vec3> LAST_POSITIONS = new HashMap<>();
@@ -53,7 +53,7 @@ public final class PlayerActionHandler {
         BlockPos pos = event.getPos();
         BlockState state = event.getState();
         Block block = state.getBlock();
-        ResourceLocation blockId = ForgeRegistries.BLOCKS.getKey(block);
+        ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
 
         PlayerActionStatsData data = PlayerActionStatsData.get(level);
         data.addBlockBroken(player.getUUID(), blockId);
@@ -77,7 +77,7 @@ public final class PlayerActionHandler {
         if (!PlayerStatsCommand.isEnabled()) return;
 
         ServerLevel level = player.serverLevel();
-        ResourceLocation mobId = ForgeRegistries.ENTITY_TYPES.getKey(mob.getType());
+        ResourceLocation mobId = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType());
         PlayerActionStatsData data = PlayerActionStatsData.get(level);
         data.addMobKilled(player.getUUID(), mobId);
 
@@ -92,21 +92,21 @@ public final class PlayerActionHandler {
     }
 
     @SubscribeEvent
-    public static void onLivingHurt(LivingHurtEvent event) {
+    public static void onLivingHurt(LivingDamageEvent.Post event) {
         LivingEntity victim = event.getEntity();
         Entity src = event.getSource().getEntity();
         if (!(src instanceof ServerPlayer player)) return;
         if (!(victim instanceof Mob mob)) return;
         if (!PlayerStatsCommand.isEnabled()) return;
 
-        float amount = event.getAmount();
+        float amount = event.getNewDamage();
         if (amount <= 0) return;
 
         ServerLevel level = player.serverLevel();
         PlayerActionStatsData data = PlayerActionStatsData.get(level);
         data.addDamageDealt(player.getUUID(), amount);
 
-        ResourceLocation mobId = ForgeRegistries.ENTITY_TYPES.getKey(mob.getType());
+        ResourceLocation mobId = BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType());
         LOGGER.debug("[PlayerAction] {} damaged mob {} for {} at {} in {}", player.getGameProfile().getName(),
                 mobId, amount, victim.blockPosition(), level.dimension().location());
 
@@ -119,9 +119,9 @@ public final class PlayerActionHandler {
     }
 
     @SubscribeEvent
-    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-        if (!(event.player instanceof ServerPlayer player)) return;
+    public static void onPlayerTick(PlayerTickEvent.Post event) {
+
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
         if (player.level().isClientSide) return;
         if (!PlayerStatsCommand.isEnabled()) return;
 
