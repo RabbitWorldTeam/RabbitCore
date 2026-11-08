@@ -56,3 +56,9 @@ player_names = ["BotAccount"]
 `./gradlew build` 包含 `bridgeTest`，可用 `./gradlew bridgeTest` 单独运行配置、协议和本地 WebSocket 回归检查。Windows 使用 `.\gradlew.bat`。
 
 游戏内验收：两位玩家登录，与适配插件互发消息；分别测试无 @ 的游戏 ID 提及、关闭音效、关闭接收、黑白名单、重连与无效配置重载。确认只有被提及者听到声音，并在重启后确认个人偏好保留。插件尚未适配时，独立协议测试不等同于真实 AstrBot 联调。
+
+## 可选白名单管理
+
+RabbitCore 可对接 RabbitAuth 的自定义白名单，按明确的群 ID 和发送者 ID 授权，不继承群管理员昵称或角色。
+默认关闭，支持结构化 admin.whitelist 和管理功能开启后的白名单文本命令；结果通过 admin.whitelist.result 定向回复。
+完整配置和 AstrBot 接口见 [群聊白名单协议](whitelist-admin.md)。AstrBot 插件本体尚未接通。
