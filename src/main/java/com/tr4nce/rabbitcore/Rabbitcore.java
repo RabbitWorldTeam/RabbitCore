@@ -3,6 +3,7 @@ package com.tr4nce.rabbitcore;
 import com.mojang.logging.LogUtils;
 import com.tr4nce.rabbitcore.command.ChestRegistryCommand;
 import com.tr4nce.rabbitcore.command.PlayerStatsCommand;
+import com.tr4nce.rabbitcore.quest.WeeklyQuests;
 import com.tr4nce.rabbitcore.registry.ModBlockEntities;
 import com.tr4nce.rabbitcore.registry.ModBlocks;
 import com.tr4nce.rabbitcore.registry.ModItems;
@@ -27,6 +28,7 @@ public class Rabbitcore {
         ModBlocks.register(modEventBus);
         ModItems.register(modEventBus);
         ModBlockEntities.register(modEventBus);
+        WeeklyQuests.register();
 
         // Register ourselves for game events.
         NeoForge.EVENT_BUS.register(this);
