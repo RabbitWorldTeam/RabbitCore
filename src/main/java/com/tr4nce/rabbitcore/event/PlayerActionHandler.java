@@ -4,6 +4,7 @@ import com.tr4nce.rabbitcore.Rabbitcore;
 import com.tr4nce.rabbitcore.command.PlayerStatsCommand;
 import com.tr4nce.rabbitcore.quest.QuestTagConditionChecker;
 import com.tr4nce.rabbitcore.quest.QuestTriggerHelper;
+import com.tr4nce.rabbitcore.quest.WeeklyQuests;
 import com.tr4nce.rabbitcore.world.storage.PlayerActionStatsData;
 import dev.ftb.mods.ftbquests.api.FTBQuestsAPI;
 import dev.ftb.mods.ftbquests.quest.BaseQuestFile;
@@ -97,10 +98,11 @@ public final class PlayerActionHandler {
         Entity src = event.getSource().getEntity();
         if (!(src instanceof ServerPlayer player)) return;
         if (!(victim instanceof Mob mob)) return;
-        if (!PlayerStatsCommand.isEnabled()) return;
 
         float amount = event.getNewDamage();
         if (amount <= 0) return;
+        WeeklyQuests.recordDamage(player, mob, amount);
+        if (!PlayerStatsCommand.isEnabled()) return;
 
         ServerLevel level = player.serverLevel();
         PlayerActionStatsData data = PlayerActionStatsData.get(level);
