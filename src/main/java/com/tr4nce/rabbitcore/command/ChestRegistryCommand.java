@@ -1,6 +1,7 @@
 package com.tr4nce.rabbitcore.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.tr4nce.rabbitcore.Rabbitcore;
 import com.tr4nce.rabbitcore.world.storage.ChestRegistryData;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -26,12 +27,11 @@ public class ChestRegistryCommand {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("rabbit_chests")
-                .requires(source -> source.hasPermission(2))
-                .then(Commands.literal("list")
-                        // 3. 只有输入了 list 才会执行这个逻辑
-                        .executes(ctx -> listChests(ctx.getSource()))
-                ));
+        dispatcher.register(Commands.literal(Rabbitcore.MODID)
+                .then(Commands.literal("chests")
+                        .requires(source -> source.hasPermission(2))
+                        .then(Commands.literal("list")
+                                .executes(ctx -> listChests(ctx.getSource())))));
     }
 
     private static int listChests(CommandSourceStack source) {
