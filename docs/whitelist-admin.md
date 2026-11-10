@@ -16,7 +16,7 @@ sender_ids = ["qq:10001", "qq:10002"]
 actions = ["add", "remove", "set", "info", "list", "status"]
 ```
 
-bridge.enabled、url、token 和 server_id 沿用现有桥接配置。修改后执行 /rabbit_bridge reload 或重启。
+bridge.enabled、url、token 和 server_id 沿用现有桥接配置。修改后执行 /rabbitcore bridge reload 或重启。
 管理功能默认关闭；群列表或账号列表为空时不允许任何人。ID 必须与插件上报的完整平台 ID 完全一致。
 同一账号在 source_ids 指定的群内可以执行 actions 中的操作；群主、群管理员、昵称都不会额外获得权限。
 授权名单只能由能编辑服务器配置的人维护；不提供通过群聊给自己授权的操作。
