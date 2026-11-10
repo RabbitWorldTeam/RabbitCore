@@ -22,4 +22,17 @@ Follow the existing Java style: four-space indentation, opening braces on the de
 The bridge regression suite runs without an additional test framework. No coverage threshold is defined. Build before submitting, then exercise affected behavior in the development client and server. For chest, statistics, or quest changes, verify persistence across a world restart and the relevant FTB integration. Document reproduction steps and results; do not treat an empty test run as behavioral coverage.
 
 ## Commit & Pull Request Guidelines
-The available history contains one commit, `feat: :rocket: Init Commit 1.0.0`; use concise, type-prefixed subjects such as `fix: preserve chest registry data`. Keep changes focused. Pull requests should explain behavior changes, link relevant issues, and list build and manual verification results. Include screenshots for visible changes and call out dependency, configuration, or saved-data compatibility changes.
+Keep changes focused. Pull requests should explain behavior changes, link relevant issues, and list build and manual verification results. Include screenshots for visible changes and call out dependency, configuration, or saved-data compatibility changes.
+
+## Commit Message Format
+
+Use `<type>: :<gitmoji>: <中文摘要>` for manually authored commit subjects. Use a lowercase type, the literal colon-delimited Gitmoji shortcode, and one space between parts. Keep the Chinese summary concise and specific to the change.
+
+- `feat: :sparkles: 新特性`
+- `fix: :bug: 修复登录提示`
+- `docs: :memo: 更新安装说明`
+- `refactor: :recycle: 整理命令注册`
+- `style: :art: 调整物品配色`
+- `test: :white_check_mark: 补充权限回归检查`
+- `build: :package: 统一产物命名`
+- `chore: :wrench: 更新开发配置`
