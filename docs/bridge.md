@@ -4,7 +4,7 @@ RabbitCore 主动连接 AstrBot 插件提供的 WebSocket 服务，支持双向�
 
 ## 配置
 
-服务器首次加载世界后生成 `<世界目录>/serverconfig/rabbitcore-bridge-server.toml`。配置由服务端独立读取，不通过 NeoForge 配置同步发送给客户端。功能默认关闭。设置 `[bridge]` 下的 `enabled = true`、完整 `url`、非空 `token` 和唯一 `server_id`，再执行 `/rabbit_bridge reload`。公网连接使用 `wss://`。不要提交含令牌的配置。
+服务器首次加载世界后生成 `<世界目录>/serverconfig/rabbitcore-bridge-server.toml`。配置由服务端独立读取，不通过 NeoForge 配置同步发送给客户端。功能默认关闭。设置 `[bridge]` 下的 `enabled = true`、完整 `url`、非空 `token` 和唯一 `server_id`，再执行 `/rabbitcore bridge reload`。公网连接使用 `wss://`。不要提交含令牌的配置。
 
 连接请求头为 `Authorization: Bearer <token>`。模组发送 `hello`，插件 10 秒内回复关联 `hello.id` 的 `ready`，之后开始转发；断线自动重连，不补发断线期间消息。
 
@@ -40,14 +40,14 @@ player_names = ["BotAccount"]
 
 | 命令 | 权限与效果 |
 | --- | --- |
-| `/rabbit_bridge status` | 权限 2；连接、计数和脱敏错误 |
-| `/rabbit_bridge reload` | 权限 2；校验并重载，连接参数变化时重连 |
-| `/rabbit_bridge reconnect` | 权限 2；手动重连 |
-| `/rabbit_bridge sound on/off` | 玩家；开关个人提示音 |
-| `/rabbit_bridge sound` | 玩家；查看个人音效状态 |
-| `/rabbit_bridge sound test` | 玩家；测试自己的音效，遵守开关和冷却 |
-| `/rabbit_bridge receive on/off` | 玩家；开关个人群聊接收 |
-| `/rabbit_bridge receive` | 玩家；查看个人接收状态 |
+| `/rabbitcore bridge status` | 权限 2；连接、计数和脱敏错误 |
+| `/rabbitcore bridge reload` | 权限 2；校验并重载，连接参数变化时重连 |
+| `/rabbitcore bridge reconnect` | 权限 2；手动重连 |
+| `/rabbitcore bridge sound on/off` | 玩家；开关个人提示音 |
+| `/rabbitcore bridge sound` | 玩家；查看个人音效状态 |
+| `/rabbitcore bridge sound test` | 玩家；测试自己的音效，遵守开关和冷却 |
+| `/rabbitcore bridge receive on/off` | 玩家；开关个人群聊接收 |
+| `/rabbitcore bridge receive` | 玩家；查看个人接收状态 |
 
 个人偏好按 UUID 保存到世界的 `rabbit_bridge_preferences` SavedData，重启后保留。管理命令支持控制台。
 
