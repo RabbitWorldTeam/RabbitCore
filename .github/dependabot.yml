@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore"
+    ignore:
+      - dependency-name: "net.neoforged:neoforge"
+      - dependency-name: "dev.architectury:architectury-neoforge"
+      - dependency-name: "curse.maven:*"
+    groups:
+      gradle-dependencies:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
