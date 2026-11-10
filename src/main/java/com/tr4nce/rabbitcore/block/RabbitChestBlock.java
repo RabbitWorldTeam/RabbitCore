@@ -177,8 +177,8 @@ public class RabbitChestBlock extends ChestBlock {
         } catch (Throwable ignored) {
         }
 
-        // 彩色高亮：[Rabbit Core] 前缀、玩家名、任务名
-        Component message = Component.literal("[Rabbit Core] ")
+        // 彩色高亮：[RabbitCore] 前缀、玩家名、任务名
+        Component message = Component.literal("[RabbitCore] ")
                 .withStyle(ChatFormatting.GOLD)
                 .append(player.getDisplayName().copy().withStyle(ChatFormatting.AQUA))
                 .append(Component.literal(" 找到了一处宝箱 ").withStyle(ChatFormatting.WHITE));
