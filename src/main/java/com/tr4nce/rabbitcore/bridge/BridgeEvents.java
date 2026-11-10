@@ -42,7 +42,7 @@ public final class BridgeEvents {
         }
     }
     @SubscribeEvent public static void commands(RegisterCommandsEvent event) {
-        var root = Commands.literal("rabbit_bridge");
+        var root = Commands.literal("bridge");
         for (String action : new String[]{"status", "reload", "reconnect"}) {
             root.then(Commands.literal(action).requires(source -> source.hasPermission(2)).executes(context -> {
                 String response = service == null ? "桥接服务尚未启动" : switch (action) {
@@ -59,7 +59,7 @@ public final class BridgeEvents {
             if (sound) command.then(Commands.literal("test").executes(context -> reply(context.getSource(), true, null, true)));
             root.then(command);
         }
-        event.getDispatcher().register(root);
+        event.getDispatcher().register(Commands.literal(Rabbitcore.MODID).then(root));
     }
     private static int reply(net.minecraft.commands.CommandSourceStack source, boolean sound, Boolean enabled, boolean test)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {

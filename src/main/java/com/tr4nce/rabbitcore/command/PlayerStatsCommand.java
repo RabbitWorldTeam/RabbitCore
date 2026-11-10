@@ -1,6 +1,7 @@
 package com.tr4nce.rabbitcore.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.tr4nce.rabbitcore.Rabbitcore;
 import com.tr4nce.rabbitcore.world.storage.PlayerActionStatsData;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -29,18 +30,14 @@ public class PlayerStatsCommand {
     }
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("rabbit_stats")
-                .requires(source -> source.hasPermission(2))
+        dispatcher.register(Commands.literal(Rabbitcore.MODID)
                 .then(Commands.literal("stats")
+                        .requires(source -> source.hasPermission(2))
                         .executes(ctx -> showStats(ctx.getSource()))
-                )
-                .then(Commands.literal("clear_stats")
-                        .executes(ctx -> clearStats(ctx.getSource()))
-                )
-                .then(Commands.literal("toggle")
-                        .executes(ctx -> toggleStats(ctx.getSource()))
-                )
-        );
+                        .then(Commands.literal("clear_stats")
+                                .executes(ctx -> clearStats(ctx.getSource())))
+                        .then(Commands.literal("toggle")
+                                .executes(ctx -> toggleStats(ctx.getSource())))));
     }
 
     private static int showStats(CommandSourceStack source) {
