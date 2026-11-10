@@ -10,7 +10,9 @@
 - [FTB Quests 2101.1.26](https://www.curseforge.com/minecraft/mc-mods/ftb-quests-forge/files/8216578)
 - [FTB XMod Compat 21.1.7](https://www.curseforge.com/minecraft/mc-mods/ftb-xmod-compat/files/7429014)
 
-运行 `.\gradlew.bat build` 生成 `build/libs/rabbitcore-2.0.0.jar`。开发客户端和服务端分别使用 `run/neoforge-client` 和 `run/neoforge-server`，不会复用旧开发实例。桥接配置见 [bridge.md](bridge.md)；WebSocket 协议仍为 v1。
+运行 `.\gradlew.bat build` 生成 `build/libs/rabbitcore-1.21.1-neoforge-2.0.0.jar`。开发客户端和服务端分别使用 `run/neoforge-client` 和 `run/neoforge-server`，不会复用旧开发实例。桥接配置见 [bridge.md](bridge.md)；WebSocket 协议仍为 v1。
+
+主命令为 `/rabbitcore`。权限等级 2 可使用 `/rabbitcore chests list`、`/rabbitcore stats`、`/rabbitcore stats clear_stats` 和 `/rabbitcore stats toggle`。桥接管理和个人设置位于 `/rabbitcore bridge` 下。
 
 ## FTB Quests 周常
 
