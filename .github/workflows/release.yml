@@ -28,7 +28,10 @@ jobs:
           cache: gradle
       - name: Build and test
         run: bash ./gradlew build
-      - name: Tag and publish the tested JAR
+      - name: Package the Rabbit World datapack
+        working-directory: datapacks/rabbitworld_dimensions
+        run: zip -r ../../build/libs/rabbitworld_dimensions.zip pack.mcmeta data
+      - name: Tag and publish the tested JAR and datapack
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -42,7 +45,9 @@ jobs:
             exit 1
           fi
           jar="rabbitcore-$minecraft-neoforge-$version.jar"
+          datapack="rabbitworld_dimensions.zip"
           test -s "build/libs/$jar"
+          test -s "build/libs/$datapack"
           tag="v$version"
           ref="refs/tags/$tag"
 
@@ -60,14 +65,14 @@ jobs:
 
           if release=$(gh release view "$tag" --json isDraft,assets 2>/dev/null); then
             if jq -e '.isDraft' <<< "$release" > /dev/null; then
-              gh release upload "$tag" "build/libs/$jar" --clobber
+              gh release upload "$tag" "build/libs/$jar" "build/libs/$datapack" --clobber
               gh release edit "$tag" --draft=false
-            elif jq -e --arg jar "$jar" '.assets | any(.name == $jar)' <<< "$release" > /dev/null; then
-              echo "$tag is already published with $jar."
+            elif jq -e --arg jar "$jar" --arg datapack "$datapack" '(.assets | any(.name == $jar)) and (.assets | any(.name == $datapack))' <<< "$release" > /dev/null; then
+              echo "$tag is already published with $jar and $datapack."
             else
-              echo "::error::$tag is already published without the expected JAR."
+              echo "::error::$tag is already published without the expected assets."
               exit 1
             fi
           else
-            gh release create "$tag" "build/libs/$jar" --verify-tag --title "$tag" --generate-notes
+            gh release create "$tag" "build/libs/$jar" "build/libs/$datapack" --verify-tag --title "$tag" --generate-notes
           fi

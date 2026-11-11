@@ -3,6 +3,7 @@ package com.tr4nce.rabbitcore;
 import com.mojang.logging.LogUtils;
 import com.tr4nce.rabbitcore.command.ChestRegistryCommand;
 import com.tr4nce.rabbitcore.command.PlayerStatsCommand;
+import com.tr4nce.rabbitcore.command.WorldCommand;
 import com.tr4nce.rabbitcore.quest.WeeklyQuests;
 import com.tr4nce.rabbitcore.registry.ModBlockEntities;
 import com.tr4nce.rabbitcore.registry.ModBlocks;
@@ -45,5 +46,6 @@ public class Rabbitcore {
     public void onRegisterCommands(RegisterCommandsEvent event) {
         ChestRegistryCommand.register(event.getDispatcher());
         PlayerStatsCommand.register(event.getDispatcher());
+        WorldCommand.register(event.getDispatcher());
     }
 }
