@@ -10,7 +10,7 @@
 - [FTB Quests 2101.1.26](https://www.curseforge.com/minecraft/mc-mods/ftb-quests-forge/files/8216578)
 - [FTB XMod Compat 21.1.7](https://www.curseforge.com/minecraft/mc-mods/ftb-xmod-compat/files/7429014)
 
-运行 `.\gradlew.bat build` 生成 `build/libs/rabbitcore-1.21.1-neoforge-2.0.1.jar`。开发客户端和服务端分别使用 `run/neoforge-client` 和 `run/neoforge-server`，不会复用旧开发实例。桥接配置见 [bridge.md](bridge.md)；WebSocket 协议仍为 v1。
+运行 `.\gradlew.bat build` 生成 `build/libs/rabbitcore-1.21.1-neoforge-2.1.0.jar`。开发客户端和服务端分别使用 `run/neoforge-client` 和 `run/neoforge-server`，不会复用旧开发实例。桥接配置见 [bridge.md](bridge.md)；WebSocket 协议仍为 v1。
 
 ## 服务端全新安装
 
@@ -38,6 +38,41 @@
 数据包在 `data/rabbitworld/dimension/` 定义 `hard.json` 和 `peaceful.json`。两个维度可使用原版普通主世界生成器。RabbitCore 将 `rabbitworld:hard` 的难度固定为困难，将 `rabbitworld:peaceful` 的难度固定为和平，并跳过和平维度新区块中的结构生成。地形和普通地物继续由原版生成器处理。
 
 管理员用 `/rabbitcore world list` 查看已加载维度、实际难度和结构生成状态。用 `/rabbitcore world tp <维度> <x> <y> <z>` 前往已确认安全的坐标。验证时可调整主世界难度，再查看两个维度是否保留各自的难度。在同一世界种子的两个维度生成同一组区块，比较结构是否只在困难维度出现，并在重启后复查。
+
+### 困难维度独立种子
+
+默认沿用存档种子。要让 `rabbitworld:hard` 独立生成地形，停服后在实例的 `config/rabbitcore-server.toml` 或该存档的 `serverconfig/rabbitcore-server.toml` 中设置：
+
+```toml
+[worldGeneration]
+useHardDimensionSeed = true
+hardDimensionSeed = 7263919428147256017
+```
+
+存档内的配置优先。可将示例值换成与主世界不同的任意有符号 64 位整数。重启后，管理员可用 `/execute in rabbitworld:hard run seed` 和 `/execute in rabbitworld:peaceful run seed` 检查。和平维度继续使用存档种子。已有区块保留原地形，换种子后在新旧区块边界可能出现断层。
+
+在 NeoForge 21.1.265 的隔离存档中，以 `123456789` 为存档种子，启用上述配置后，两个维度的 `/seed` 分别返回配置值和存档种子。用 `/execute in <维度> run forceload add 0 0` 生成同坐标区块并检查保存数据，困难维度的区块包含温水海洋，和平维度的区块包含河流。
+
+### 单独重建困难维度
+
+1. 停服前，把在 `rabbitworld:hard` 下线的玩家也安排上线并撤到其他维度，搬走要保留的物品，更新指向困难维度的重生点或传送点。
+2. 正常停服后，备份整个存档。`<存档目录>` 由服务端 `server.properties` 的 `level-name` 指定，默认为 `world`。
+3. 将 `<存档目录>/dimensions/rabbitworld/hard` 整个移到存档外的备份位置。该目录包含困难维度的区块、实体、兴趣点和维度独立数据。保留 `level.dat`、`playerdata`、`datapacks` 和其他维度目录。
+4. 配置新种子后开服，确认 `/rabbitcore world list` 仍列出 `rabbitworld:hard`，查询种子，再进入困难维度触发区块生成。
+
+需要回滚时，停服，把新生成的困难维度目录移走，放回旧目录，并恢复原来的种子配置。
+
+### 地形保护
+
+地形保护默认开启，对同一存档的所有维度生效。它阻止爆炸破坏方块，以及受 `mobGriefing` 控制的生物行为，包括末影人拾起或放下方块、村民收种作物。爆炸仍会伤害和击退实体，玩家可以正常挖掘和放置方块。
+
+| 管理员命令 | 效果 |
+| --- | --- |
+| `/gamerule rabbitcoreTerrainProtection` | 查询状态 |
+| `/gamerule rabbitcoreTerrainProtection true` | 开启保护 |
+| `/gamerule rabbitcoreTerrainProtection false` | 关闭保护，末影人搬方块恢复由 `mobGriefing` 控制 |
+
+命令立即生效，设置随世界存档保存。可在测试存档中将 TNT 放在石块旁，分别在开启和关闭时引爆，再重启服务器查询规则值。
 
 ### 独立昼夜
 

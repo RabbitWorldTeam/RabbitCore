@@ -14,7 +14,7 @@
 
 ## 安装
 
-将 `rabbitcore-1.21.1-neoforge-2.0.1.jar` 和所需依赖放入客户端与服务端的 `mods/`。Rabbit World 维度需要在服务端世界中安装数据包。[全新安装与任务配置](docs/neoforge.md)
+将 `rabbitcore-1.21.1-neoforge-2.1.0.jar` 和所需依赖放入客户端与服务端的 `mods/`。Rabbit World 维度需要在服务端世界中安装数据包。[全新安装与任务配置](docs/neoforge.md)
 
 ## 常用入口
 
