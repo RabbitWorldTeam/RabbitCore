@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "package": "com.tr4nce.rabbitcore.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ChunkStatusTasksMixin",
+    "DerivedLevelDataMixin",
+    "LevelTimeInvoker",
+    "MinecraftServerMixin",
+    "PlayerListMixin",
+    "ServerChunkCacheMixin",
+    "ServerLevelMixin",
+    "StructureManagerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
