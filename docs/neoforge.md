@@ -39,6 +39,18 @@
 
 管理员用 `/rabbitcore world list` 查看已加载维度、实际难度和结构生成状态。用 `/rabbitcore world tp <维度> <x> <y> <z>` 前往已确认安全的坐标。验证时可调整主世界难度，再查看两个维度是否保留各自的难度。在同一世界种子的两个维度生成同一组区块，比较结构是否只在困难维度出现，并在重启后复查。
 
+### 地形保护
+
+地形保护默认开启，对同一存档的所有维度生效。它阻止爆炸破坏方块，以及受 `mobGriefing` 控制的生物行为，包括末影人拾起或放下方块、村民收种作物。爆炸仍会伤害和击退实体，玩家可以正常挖掘和放置方块。
+
+| 管理员命令 | 效果 |
+| --- | --- |
+| `/gamerule rabbitcoreTerrainProtection` | 查询状态 |
+| `/gamerule rabbitcoreTerrainProtection true` | 开启保护 |
+| `/gamerule rabbitcoreTerrainProtection false` | 关闭保护，末影人搬方块恢复由 `mobGriefing` 控制 |
+
+命令立即生效，设置随世界存档保存。可在测试存档中将 TNT 放在石块旁，分别在开启和关闭时引爆，再重启服务器查询规则值。
+
 ### 独立昼夜
 
 管理员可以查询或修改任意已加载维度的时钟。以下用建筑世界举例。

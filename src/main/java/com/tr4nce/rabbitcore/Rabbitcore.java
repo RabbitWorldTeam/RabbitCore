@@ -8,6 +8,7 @@ import com.tr4nce.rabbitcore.quest.WeeklyQuests;
 import com.tr4nce.rabbitcore.registry.ModBlockEntities;
 import com.tr4nce.rabbitcore.registry.ModBlocks;
 import com.tr4nce.rabbitcore.registry.ModItems;
+import com.tr4nce.rabbitcore.world.WorldRules;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
@@ -26,6 +27,7 @@ public class Rabbitcore {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     public Rabbitcore(IEventBus modEventBus) {
+        WorldRules.register();
         ModBlocks.register(modEventBus);
         ModItems.register(modEventBus);
         ModBlockEntities.register(modEventBus);
