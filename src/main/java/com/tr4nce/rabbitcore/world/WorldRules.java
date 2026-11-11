@@ -1,5 +1,6 @@
 package com.tr4nce.rabbitcore.world;
 
+import com.tr4nce.rabbitcore.Config;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -22,6 +23,11 @@ public final class WorldRules {
 
     public static boolean protectsTerrain(Level level) {
         return level.getGameRules().getBoolean(terrainProtection);
+    }
+
+    public static long generationSeed(ResourceKey<Level> dimension, long worldSeed) {
+        return HARD.equals(dimension) && Config.USE_HARD_DIMENSION_SEED.get()
+                ? Config.HARD_DIMENSION_SEED.get() : worldSeed;
     }
 
     public static Difficulty difficulty(ResourceKey<Level> dimension) {

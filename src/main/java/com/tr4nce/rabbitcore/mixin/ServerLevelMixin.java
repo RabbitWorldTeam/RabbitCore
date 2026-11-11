@@ -7,6 +7,7 @@ import com.tr4nce.rabbitcore.world.storage.DimensionClockData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.levelgen.WorldOptions;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,6 +17,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ServerLevel.class)
 abstract class ServerLevelMixin {
+    @Redirect(method = {"<init>", "getSeed"}, at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/levelgen/WorldOptions;seed()J"), require = 2)
+    private long rabbitcore$useDimensionSeed(WorldOptions options) {
+        ServerLevel level = (ServerLevel) (Object) this;
+        return WorldRules.generationSeed(level.dimension(), options.seed());
+    }
+
     @Inject(method = "<init>", at = @At("RETURN"))
     private void rabbitcore$initializeWorldRules(CallbackInfo callback) {
         ServerLevel level = (ServerLevel) (Object) this;
