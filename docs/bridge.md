@@ -34,9 +34,9 @@ wscat -c ws://192.168.1.20:6701/rabbitcore -H "Authorization: Bearer YOUR_TOKEN"
 {"version":1,"id":"210081fe-b443-46ae-92de-269e2acc835d","server_id":"rabbit-house","timestamp":0,"type":"chat.external","data":{"source":{"id":"intranet","name":"内网"},"sender":{"id":"bot:1","name":"机器人"},"text":"你好"}}
 ```
 
-- `ready.data.reply_to` 对应 `hello.id`。`chat.result` 的 `data.reply_to` 对应聊天 ID，`ok` 表示游戏线程是否已处理消息，失败时 `code` 给出原因。外部消息只向游戏内接收外部聊天的玩家广播。
+- `ready.data.reply_to` 对应 `hello.id`。`chat.result` 的 `data.reply_to` 对应聊天 ID，`ok` 表示游戏线程是否已处理消息，失败时 `code` 给出原因。入站聊天向游戏内接收外部聊天的玩家广播。开启 `bridge.game_to_external` 且出站桥接就绪时，RabbitCore 同时按 `chat.game` 转发给 RabbitChat，使用入站消息的发送者名称。回执只确认游戏侧处理。
 - `subscribe` 使用与 `hello` 相同的 `data.events`，替换当前订阅。空数组取消所有订阅。断线后重新发送 `hello`，只收到新的实时事件。
-- 游戏聊天、上下线和死亡事件沿用下文的桥接开关和过滤规则。入站聊天也遵守 `bridge.external_to_game` 和发送者过滤。该入口只处理事件订阅和聊天。
+- 游戏聊天、上下线和死亡事件沿用下文的桥接开关和过滤规则。入站聊天遵守 `bridge.external_to_game` 和外部发送者 ID 过滤，玩家 UUID 和名称名单用于游戏玩家聊天。RabbitChat 发来的群消息继续只进游戏，入站订阅者只收到游戏内原生聊天事件。
 
 ## 配置
 
