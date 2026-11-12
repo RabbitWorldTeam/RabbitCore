@@ -286,6 +286,14 @@ public final class BridgeRegressionTest {
                 bridge.send("chat.game", player, "Steve", external("outgoing"));
                 check(peer.json().get("type").getAsString().equals("chat.game"), "outbound chat");
                 await(() -> bridge.sent.sum() == 1);
+                bridge.sendInboundChat(BridgeProtocol.external(external("inbound relay")));
+                JsonObject relayed = peer.json();
+                JsonObject relayData = relayed.getAsJsonObject("data");
+                check(relayed.get("type").getAsString().equals("chat.game")
+                                && relayData.get("text").getAsString().equals("inbound relay")
+                                && relayData.getAsJsonObject("sender").get("id").getAsString().equals("qq:2")
+                                && relayData.getAsJsonObject("source").get("name").getAsString().equals("交流群"),
+                        "inbound relay uses outbound player chat event with external identity");
                 JsonObject death = new JsonObject();
                 death.addProperty("reason", "Steve fell from a high place");
                 death.addProperty("text", "[死亡] Steve fell from a high place");

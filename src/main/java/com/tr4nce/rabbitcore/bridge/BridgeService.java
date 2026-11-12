@@ -144,6 +144,7 @@ public final class BridgeService implements AutoCloseable {
                     continue;
                 }
                 broadcast(chat.message());
+                if (config.flag("game_to_external")) connection.sendInboundChat(chat.message());
                 chat.reply(null);
             }
         }

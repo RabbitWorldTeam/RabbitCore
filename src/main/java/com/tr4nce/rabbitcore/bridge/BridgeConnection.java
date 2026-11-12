@@ -86,7 +86,7 @@ public final class BridgeConnection implements AutoCloseable {
     public final LongAdder sent = new LongAdder(), received = new LongAdder(), filtered = new LongAdder();
     public final LongAdder rateDropped = new LongAdder(), queueDropped = new LongAdder();
     public record Incoming(long generation, BridgeProtocol.External message) {}
-    private record Outgoing(long generation, String type, UUID player, String name, String json) {}
+    private record Outgoing(long generation, String type, UUID player, String name, String externalSenderId, String json) {}
     private record Control(String json, long generation, Runnable after) {}
 
     public BridgeConnection(BridgeConfig config, String modVersion) {
@@ -119,6 +119,21 @@ public final class BridgeConnection implements AutoCloseable {
                 + " | 最近错误=" + lastError;
     }
     public void send(String type, UUID player, String name, JsonObject data) {
+        enqueue(type, player, name, null, data);
+    }
+    void sendInboundChat(BridgeProtocol.External message) {
+        JsonObject sender = new JsonObject();
+        sender.addProperty("id", message.senderId());
+        sender.addProperty("name", message.sender());
+        JsonObject source = new JsonObject();
+        source.addProperty("name", message.source());
+        JsonObject data = new JsonObject();
+        data.add("sender", sender);
+        data.add("source", source);
+        data.addProperty("text", message.text());
+        enqueue("chat.game", null, "", message.senderId(), data);
+    }
+    private void enqueue(String type, UUID player, String name, String externalSenderId, JsonObject data) {
         if (!ready()) return;
         long currentGeneration = generation;
         String json = BridgeProtocol.message(config.text("server_id"), type, data).toString();
@@ -126,7 +141,7 @@ public final class BridgeConnection implements AutoCloseable {
         synchronized (outgoing) {
             if (!current(currentGeneration)) return;
             if (outgoing.size() >= config.number("limits.outgoing_queue_capacity")) { queueDropped.increment(); return; }
-            outgoing.add(new Outgoing(currentGeneration, type, player, name, json));
+            outgoing.add(new Outgoing(currentGeneration, type, player, name, externalSenderId, json));
         }
     }
     public Incoming poll() { synchronized (incoming) { return incoming.poll(); } }
@@ -186,7 +201,9 @@ public final class BridgeConnection implements AutoCloseable {
                     data.get("sender_id").getAsString(), data.get("action").getAsString(), "", true, 1));
         }
         if (entry.type.equals("chat.game")) return config.flag("game_to_external")
-                && config.allowsPlayer("chat.game_to_external", entry.player, entry.name);
+                && (entry.externalSenderId != null
+                        ? config.flag("external_to_game") && config.allowsSender(entry.externalSenderId)
+                        : config.allowsPlayer("chat.game_to_external", entry.player, entry.name));
         if (entry.type.equals("player.death")) return config.flag("death.enabled")
                 && config.allowsPlayer("death", entry.player, entry.name);
         boolean join = entry.type.equals("player.join");
