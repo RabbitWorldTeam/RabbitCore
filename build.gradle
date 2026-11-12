@@ -9,6 +9,7 @@ base { archivesName = "${mod_id}-${minecraft_version}-neoforge" }
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 repositories {
+    mavenCentral()
     maven {
         url = 'https://cursemaven.com'
         content { includeGroup 'curse.maven' }
@@ -29,6 +30,11 @@ neoForge {
 }
 
 dependencies {
+    // Match Minecraft's Netty version. Only the HTTP/WebSocket codec is missing from the game.
+    jarJar(implementation('io.netty:netty-codec-http:4.1.97.Final') { transitive = false }) {
+        version { strictly '[4.1.97.Final]' }
+    }
+    additionalRuntimeClasspath('io.netty:netty-codec-http:4.1.97.Final') { transitive = false }
     implementation "dev.architectury:architectury-neoforge:${architectury_version}"
     implementation 'curse.maven:ftb-library-forge-404465:9008089'
     implementation 'curse.maven:ftb-teams-forge-404468:8724782'

@@ -2,6 +2,42 @@
 
 RabbitCore 主动连接 AstrBot 插件提供的 WebSocket 服务，支持双向文本聊天、彩色显示、游戏 ID 提及音效和玩家上下线通知。插件需适配 RabbitCore Bridge v1 自定义协议。
 
+## 外部服务主动连接 RabbitCore
+
+在服务端存档的 `serverconfig/rabbitcore-bridge-server.toml` 添加或修改：
+
+```toml
+[bridge.inbound]
+enabled = true
+bind = "0.0.0.0"
+port = 6701
+token = "YOUR_RANDOM_ASCII_TOKEN"
+```
+
+将示例令牌替换为独立的随机字符串，使用可打印 ASCII 字符且不含空格。修改监听设置、入站令牌、`bridge.server_id` 或入站队列及速率限制后重启服务器。用 `/rabbitcore bridge status` 查询监听状态。入站可以独立启用，`bridge.enabled` 控制的是 RabbitCore 主动连接 AstrBot。
+
+连接 URL 为 `ws://<服务器内网IP>:6701/rabbitcore`，升级请求带 `Authorization: Bearer <token>`。这是明文连接，令牌和消息都经内网明文传输，防火墙应只向需要接入的主机开放该端口。
+
+```sh
+wscat -c ws://192.168.1.20:6701/rabbitcore -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+连接后 10 秒内发送 `hello`。每条消息使用新的 UUID，`timestamp` 填当前 Unix 毫秒时间，`server_id` 必须与 `bridge.server_id` 一致。以下示例使用默认 ID。
+
+```json
+{"version":1,"id":"8dfda147-e551-4d9f-9404-17cd0d5df34c","server_id":"rabbit-house","timestamp":0,"type":"hello","data":{"events":["chat.game","player.join","player.leave","player.death"]}}
+```
+
+收到 `ready` 后可以发聊天：
+
+```json
+{"version":1,"id":"210081fe-b443-46ae-92de-269e2acc835d","server_id":"rabbit-house","timestamp":0,"type":"chat.external","data":{"source":{"id":"intranet","name":"内网"},"sender":{"id":"bot:1","name":"机器人"},"text":"你好"}}
+```
+
+- `ready.data.reply_to` 对应 `hello.id`。`chat.result` 的 `data.reply_to` 对应聊天 ID，`ok` 表示游戏线程是否已处理消息，失败时 `code` 给出原因。外部消息只向游戏内接收外部聊天的玩家广播。
+- `subscribe` 使用与 `hello` 相同的 `data.events`，替换当前订阅。空数组取消所有订阅。断线后重新发送 `hello`，只收到新的实时事件。
+- 游戏聊天、上下线和死亡事件沿用下文的桥接开关和过滤规则。入站聊天也遵守 `bridge.external_to_game` 和发送者过滤。该入口只处理事件订阅和聊天。
+
 ## 配置
 
 服务器首次加载世界后生成 `<世界目录>/serverconfig/rabbitcore-bridge-server.toml`。配置由服务端独立读取，不通过 NeoForge 配置同步发送给客户端。功能默认关闭。设置 `[bridge]` 下的 `enabled = true`、完整 `url`、非空 `token` 和唯一 `server_id`，再执行 `/rabbitcore bridge reload`。公网连接使用 `wss://`。不要提交含令牌的配置。

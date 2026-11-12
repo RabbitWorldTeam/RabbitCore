@@ -21,6 +21,7 @@ public final class BridgeService implements AutoCloseable {
     private final Path path;
     private BridgeConfig config = BridgeConfig.disabled();
     private final BridgeConnection connection;
+    private final InboundBridge inbound;
     private final Map<UUID, Long> lastSound = new HashMap<>();
     private final BridgePreferencesData preferences;
     private SoundEvent sound;
@@ -36,6 +37,17 @@ public final class BridgeService implements AutoCloseable {
             LoggerFactory.getLogger("RabbitCore-Bridge").warn("Bridge disabled: {}", configurationError); }
         resolveSound();
         connection = new BridgeConnection(config, modVersion);
+        InboundBridge listener = null;
+        if (config.flag("inbound.enabled")) {
+            try {
+                listener = new InboundBridge(config);
+                LoggerFactory.getLogger("RabbitCore-Bridge").info("Inbound WebSocket listening on {}:{}{}",
+                        config.text("inbound.bind"), config.number("inbound.port"), InboundBridge.PATH);
+            } catch (RuntimeException e) {
+                LoggerFactory.getLogger("RabbitCore-Bridge").warn("Inbound WebSocket startup failed", e);
+            }
+        }
+        inbound = listener;
     }
     public String reload() {
         try {
@@ -53,13 +65,16 @@ public final class BridgeService implements AutoCloseable {
             sound = BuiltInRegistries.SOUND_EVENT.get(ResourceLocation.tryParse("minecraft:block.note_block.pling"));
         }
     }
-    public String status() { return connection.status() + (configurationError == null ? "" : " | 配置错误=" + configurationError); }
+    public String status() {
+        return connection.status() + " | 入站 WebSocket=" + (inbound != null && inbound.active() ? "监听中" : "未监听")
+                + (configurationError == null ? "" : " | 配置错误=" + configurationError);
+    }
     public String reconnect() {
         if (!config.flag("enabled")) return "桥接当前禁用";
         connection.reconnect(); return "已请求重新连接";
     }
     public void gameChat(ServerPlayer player, String original) {
-        if (!connection.ready() || !config.flag("game_to_external")) return;
+        if (!hasAudience("chat.game") || !config.flag("game_to_external")) return;
         if (!config.allowsPlayer("chat.game_to_external", player.getUUID(), player.getGameProfile().getName())) {
             connection.filtered.increment(); return;
         }
@@ -67,11 +82,12 @@ public final class BridgeService implements AutoCloseable {
         String text = BridgeProtocol.clean(original, false).strip();
         if (text.isEmpty()) return;
         JsonObject data = new JsonObject(); data.add("sender", player(player)); data.addProperty("text", text);
-        connection.send("chat.game", player.getUUID(), player.getGameProfile().getName(), data);
+        publish("chat.game", player, data);
     }
     public void presence(ServerPlayer player, boolean join) {
         if (!join) lastSound.remove(player.getUUID());
-        if (!connection.ready() || !config.flag("presence.enabled")
+        String event = join ? "player.join" : "player.leave";
+        if (!hasAudience(event) || !config.flag("presence.enabled")
                 || !config.flag(join ? "presence.join_enabled" : "presence.leave_enabled")) return;
         if (!config.allowsPlayer("presence", player.getUUID(), player.getGameProfile().getName())) {
             connection.filtered.increment(); return;
@@ -79,10 +95,10 @@ public final class BridgeService implements AutoCloseable {
         JsonObject data = new JsonObject(); data.add("player", player(player));
         data.addProperty("text", config.text(join ? "presence.join_format" : "presence.leave_format")
                 .replace("{player}", player.getGameProfile().getName()));
-        connection.send(join ? "player.join" : "player.leave", player.getUUID(), player.getGameProfile().getName(), data);
+        publish(event, player, data);
     }
     public void death(ServerPlayer player) {
-        if (!connection.ready() || !config.flag("death.enabled")) return;
+        if (!hasAudience("player.death") || !config.flag("death.enabled")) return;
         UUID id = player.getUUID();
         String name = player.getGameProfile().getName();
         if (!config.allowsPlayer("death", id, name)) {
@@ -97,7 +113,16 @@ public final class BridgeService implements AutoCloseable {
         data.add("player", player(player));
         data.addProperty("reason", reason);
         data.addProperty("text", text.isEmpty() ? reason : text);
-        connection.send("player.death", id, name, data);
+        publish("player.death", player, data);
+    }
+
+    private boolean hasAudience(String event) {
+        return connection.ready() || (inbound != null && inbound.subscribed(event));
+    }
+
+    private void publish(String event, ServerPlayer player, JsonObject data) {
+        if (connection.ready()) connection.send(event, player.getUUID(), player.getGameProfile().getName(), data);
+        if (inbound != null && inbound.subscribed(event)) inbound.publish(event, data);
     }
 
     private static String limitDeathText(String text) {
@@ -109,6 +134,19 @@ public final class BridgeService implements AutoCloseable {
         value.addProperty("name", player.getGameProfile().getName()); return value;
     }
     public void tick() {
+        if (inbound != null) {
+            for (int n = 0; n < 20; n++) {
+                InboundBridge.Chat chat = inbound.poll();
+                if (chat == null) break;
+                if (!chat.connected()) continue;
+                if (!config.flag("external_to_game") || !config.allowsSender(chat.message().senderId())) {
+                    chat.reply("FORBIDDEN");
+                    continue;
+                }
+                broadcast(chat.message());
+                chat.reply(null);
+            }
+        }
         for (int n = 0; n < 4; n++) {
             var incoming = connection.pollAdmin();
             if (incoming == null) break;
@@ -131,15 +169,20 @@ public final class BridgeService implements AutoCloseable {
             BridgeProtocol.External message = incoming.message();
             if (!connection.current(incoming.generation()) || !config.flag("external_to_game")
                     || !config.allowsSender(message.senderId())) { connection.filtered.increment(); continue; }
-            Set<String> online = new HashSet<>();
-            for (ServerPlayer player : server.getPlayerList().getPlayers()) online.add(player.getGameProfile().getName().toLowerCase(Locale.ROOT));
-            Set<String> mentions = new HashSet<>(message.mentions()); mentions.addAll(BridgeProtocol.tokens(message.text()));
-            Component formatted = format(message, online);
-            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                if (!preferences.receive(player.getUUID())) continue;
-                player.sendSystemMessage(formatted);
-                if (mentions.contains(player.getGameProfile().getName().toLowerCase(Locale.ROOT))) playSound(player);
-            }
+            broadcast(message);
+        }
+    }
+
+    private void broadcast(BridgeProtocol.External message) {
+        Set<String> online = new HashSet<>();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) online.add(player.getGameProfile().getName().toLowerCase(Locale.ROOT));
+        Set<String> mentions = new HashSet<>(message.mentions());
+        mentions.addAll(BridgeProtocol.tokens(message.text()));
+        Component formatted = format(message, online);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!preferences.receive(player.getUUID())) continue;
+            player.sendSystemMessage(formatted);
+            if (mentions.contains(player.getGameProfile().getName().toLowerCase(Locale.ROOT))) playSound(player);
         }
     }
     private Component format(BridgeProtocol.External message, Set<String> online) {
@@ -192,5 +235,9 @@ public final class BridgeService implements AutoCloseable {
         return result;
     }
     public String testSound(ServerPlayer player) { return playSound(player); }
-    @Override public void close() { connection.close(); lastSound.clear(); }
+    @Override public void close() {
+        if (inbound != null) inbound.close();
+        connection.close();
+        lastSound.clear();
+    }
 }

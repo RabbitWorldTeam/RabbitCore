@@ -5,6 +5,9 @@ import com.tr4nce.rabbitcore.world.storage.BridgePreferencesData;
 import net.minecraft.nbt.CompoundTag;
 import java.io.*;
 import java.net.*;
+import java.net.http.HttpClient;
+import java.net.http.WebSocket;
+import java.net.http.WebSocketHandshakeException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.MessageDigest;
@@ -105,7 +108,82 @@ public final class BridgeRegressionTest {
         whitelistAdmin();
         sockets();
         filteringAndLimits();
+        inboundSockets();
         System.out.println("Bridge regression checks passed: " + checks);
+    }
+
+    private static void inboundSockets() throws Exception {
+        int port;
+        try (ServerSocket reservation = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            port = reservation.getLocalPort();
+        }
+        BridgeConfig settings = config("""
+                [bridge.inbound]
+                enabled = true
+                bind = "127.0.0.1"
+                port = %d
+                token = "inbound-test-token"
+                """.formatted(port));
+        URI address = URI.create("ws://127.0.0.1:" + port + "/rabbitcore");
+        BlockingQueue<JsonObject> messages = new LinkedBlockingQueue<>();
+        WebSocket.Listener receiver = new WebSocket.Listener() {
+            private final StringBuilder frame = new StringBuilder();
+
+            @Override public CompletionStage<?> onText(WebSocket socket, CharSequence text, boolean last) {
+                frame.append(text);
+                if (last) {
+                    messages.add(BridgeProtocol.parse(frame.toString()));
+                    frame.setLength(0);
+                }
+                socket.request(1);
+                return null;
+            }
+        };
+        try (InboundBridge bridge = new InboundBridge(settings); HttpClient http = HttpClient.newHttpClient()) {
+            try {
+                http.newWebSocketBuilder().buildAsync(address, receiver).get(5, TimeUnit.SECONDS);
+                throw new AssertionError("Inbound socket accepted unauthenticated upgrade");
+            } catch (ExecutionException e) {
+                check(e.getCause() instanceof WebSocketHandshakeException failure
+                        && failure.getResponse().statusCode() == 401, "Inbound upgrade requires token");
+            }
+            WebSocket socket = http.newWebSocketBuilder().header("Authorization", "Bearer inbound-test-token")
+                    .buildAsync(address, receiver).get(5, TimeUnit.SECONDS);
+            try {
+                JsonObject subscription = new JsonObject();
+                JsonArray events = new JsonArray();
+                events.add("chat.game");
+                subscription.add("events", events);
+                sendInbound(socket, "hello", subscription);
+                check(inboundResponse(messages).type().equals("ready"), "Inbound hello returns ready");
+                check(bridge.subscribed("chat.game") && !bridge.subscribed("player.join"), "Inbound subscriptions are scoped");
+                bridge.publish("player.join", new JsonObject());
+                bridge.publish("chat.game", new JsonObject());
+                check(inboundResponse(messages).type().equals("chat.game"), "Only subscribed event is sent");
+                sendInbound(socket, "chat.external", external("hello"));
+                InboundBridge.Chat chat = null;
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while (chat == null && System.nanoTime() < deadline) {
+                    chat = bridge.poll();
+                    if (chat == null) Thread.sleep(10);
+                }
+                check(chat != null && chat.message().text().equals("hello"), "Inbound chat reaches game queue");
+                chat.reply(null);
+                check(inboundResponse(messages).type().equals("chat.result"), "Inbound chat acknowledgement");
+            } finally {
+                socket.abort();
+            }
+        }
+    }
+
+    private static void sendInbound(WebSocket socket, String type, JsonObject data) throws Exception {
+        socket.sendText(BridgeProtocol.message("rabbit-house", type, data).toString(), true).get(5, TimeUnit.SECONDS);
+    }
+
+    private static BridgeProtocol.Envelope inboundResponse(BlockingQueue<JsonObject> messages) throws InterruptedException {
+        JsonObject result = messages.poll(5, TimeUnit.SECONDS);
+        if (result == null) throw new AssertionError("No inbound bridge response");
+        return BridgeProtocol.envelope(result, "rabbit-house");
     }
 
     private static void whitelistAdmin() throws Exception {
