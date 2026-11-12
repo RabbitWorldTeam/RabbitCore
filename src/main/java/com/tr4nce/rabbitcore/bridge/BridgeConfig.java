@@ -25,6 +25,10 @@ public final class BridgeConfig {
         DEFAULTS.put("url", "ws://127.0.0.1:6700/rabbitcore");
         DEFAULTS.put("token", "");
         DEFAULTS.put("server_id", "rabbit-house");
+        DEFAULTS.put("inbound.enabled", false);
+        DEFAULTS.put("inbound.bind", "0.0.0.0");
+        DEFAULTS.put("inbound.port", 6701);
+        DEFAULTS.put("inbound.token", "");
         DEFAULTS.put("game_to_external", true);
         DEFAULTS.put("external_to_game", true);
         DEFAULTS.put("admin.whitelist.enabled", false);
@@ -101,6 +105,12 @@ public final class BridgeConfig {
         });
         BridgeConfig config = new BridgeConfig(result);
         require(config.text("server_id").matches("[A-Za-z0-9_-]{1,64}"), "server_id");
+        config.range("inbound.port", 1, 65535, true);
+        if (config.flag("inbound.enabled")) {
+            require(!config.text("inbound.bind").isBlank(), "inbound.bind");
+            require(!config.text("inbound.token").isBlank() && config.text("inbound.token").chars()
+                    .allMatch(c -> c >= 33 && c <= 126), "inbound.token");
+        }
         if (config.flag("enabled")) {
             URI uri;
             try { uri = URI.create(config.text("url")); }
