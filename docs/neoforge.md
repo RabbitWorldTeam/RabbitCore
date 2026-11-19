@@ -2,7 +2,7 @@
 
 此分支仅面向 Minecraft 1.21.1、NeoForge 21.1.265 或更新的 21.1.x，以及 Java 21。旧 Forge 版 JAR 不能和新版同时放在 `mods/`。未验证 1.20.1 世界直接升级；测试请使用新世界或存档副本。
 
-运行 `.\gradlew.bat build` 生成 `build/libs/rabbitcore-1.21.1-neoforge-2.2.1.jar`。开发客户端和服务端分别使用 `run/neoforge-client` 和 `run/neoforge-server`，不会复用旧开发实例。桥接配置见 [bridge.md](bridge.md)；WebSocket 协议仍为 v1。
+运行 `.\gradlew.bat build` 生成 `build/libs/rabbitcore-1.21.1-neoforge-2.3.0.jar`。开发客户端和服务端分别使用 `run/neoforge-client` 和 `run/neoforge-server`，不会复用旧开发实例。桥接配置见 [bridge.md](bridge.md)；WebSocket 协议仍为 v1。
 
 ## 服务端全新安装
 
