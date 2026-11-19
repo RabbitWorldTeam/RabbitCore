@@ -11,10 +11,19 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityMobGriefingEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.ExplosionEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 @EventBusSubscriber(modid = Rabbitcore.MODID)
 public final class WorldEvents {
     private WorldEvents() {}
+
+    @SubscribeEvent
+    public static void onPlayerTick(PlayerTickEvent.Pre event) {
+        if (event.getEntity() instanceof ServerPlayer player
+                && player.isFallFlying() && !WorldRules.allowsElytraFlight(player.level())) {
+            player.stopFallFlying();
+        }
+    }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onExplosion(ExplosionEvent.Detonate event) {

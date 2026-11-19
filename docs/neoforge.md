@@ -74,6 +74,14 @@ hardDimensionSeed = 7263919428147256017
 
 命令立即生效，设置随世界存档保存。可在测试存档中将 TNT 放在石块旁，分别在开启和关闭时引爆，再重启服务器查询规则值。
 
+### 鞘翅与玩家传送指令
+
+- `/gamerule rabbitcoreAllowElytraFlight false` 禁止玩家开始鞘翅滑翔，空中的玩家会结束滑翔并正常下坠，可能受到摔落伤害。默认 `true`。
+- `/gamerule rabbitcoreRestrictTeleportCommands true` 拦截玩家（含 OP）执行 `home`、`spawn`、`playerspawn`、`warp`、`back`、`rtp`、`tpa`、`tpahere` 和 `tpaccept`。默认 `false`。支持 FTB Essentials 的 `/ftbessentials home` 形式和带命名空间的命令名。原版管理传送沿用原有权限，JourneyMap 航点传送由其自身权限控制。
+- 可在 RabbitCore 服务端配置的 `[teleportCommands]` 下通过 `additionalBlockedCommands = ["return", "travel town"]` 补充别名或子命令。填写命令路径，省略开头的斜杠和命令参数。
+
+在测试服用普通玩家和 OP 分别试飞、执行传送指令及点击家或传送点列表里的传送链接。切换规则后再次尝试，并用控制台和 OP 的原版 `/tp` 验证管理入口。重启后查询两条规则，确认设置随世界保存。
+
 ### 独立昼夜
 
 管理员可以查询或修改任意已加载维度的时钟。以下用建筑世界举例。

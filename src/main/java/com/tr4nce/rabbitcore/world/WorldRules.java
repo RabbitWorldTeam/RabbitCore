@@ -10,6 +10,8 @@ import net.minecraft.world.level.Level;
 
 public final class WorldRules {
     private static GameRules.Key<GameRules.BooleanValue> terrainProtection;
+    private static GameRules.Key<GameRules.BooleanValue> allowElytraFlight;
+    private static GameRules.Key<GameRules.BooleanValue> restrictTeleportCommands;
 
     private static final ResourceKey<Level> HARD = key("hard");
     private static final ResourceKey<Level> PEACEFUL = key("peaceful");
@@ -19,6 +21,18 @@ public final class WorldRules {
     public static void register() {
         terrainProtection = GameRules.register("rabbitcoreTerrainProtection", GameRules.Category.UPDATES,
                 GameRules.BooleanValue.create(true));
+        allowElytraFlight = GameRules.register("rabbitcoreAllowElytraFlight", GameRules.Category.PLAYER,
+                GameRules.BooleanValue.create(true));
+        restrictTeleportCommands = GameRules.register("rabbitcoreRestrictTeleportCommands", GameRules.Category.PLAYER,
+                GameRules.BooleanValue.create(false));
+    }
+
+    public static boolean allowsElytraFlight(Level level) {
+        return level.getGameRules().getBoolean(allowElytraFlight);
+    }
+
+    public static boolean restrictsTeleportCommands(Level level) {
+        return level.getGameRules().getBoolean(restrictTeleportCommands);
     }
 
     public static boolean protectsTerrain(Level level) {
