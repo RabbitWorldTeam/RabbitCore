@@ -25,10 +25,3 @@ type="required"
 versionRange="[${minecraft_version}]"
 ordering="NONE"
 side="BOTH"
-
-[[dependencies.${mod_id}]]
-modId="ftbquests"
-type="required"
-versionRange="[2101.1.26,2102)"
-ordering="AFTER"
-side="BOTH"

@@ -10,14 +10,6 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 repositories {
     mavenCentral()
-    maven {
-        url = 'https://cursemaven.com'
-        content { includeGroup 'curse.maven' }
-    }
-    maven {
-        url = 'https://maven.architectury.dev/'
-        content { includeGroup 'dev.architectury' }
-    }
 }
 
 neoForge {
@@ -35,11 +27,6 @@ dependencies {
         version { strictly '[4.1.97.Final]' }
     }
     additionalRuntimeClasspath('io.netty:netty-codec-http:4.1.97.Final') { transitive = false }
-    implementation "dev.architectury:architectury-neoforge:${architectury_version}"
-    implementation 'curse.maven:ftb-library-forge-404465:9008089'
-    implementation 'curse.maven:ftb-teams-forge-404468:8724782'
-    implementation 'curse.maven:ftb-quests-forge-289412:8216578'
-    runtimeOnly 'curse.maven:ftb-xmod-compat-889915:7429014'
 }
 
 sourceSets.test.compileClasspath += sourceSets.main.compileClasspath

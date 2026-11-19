@@ -1,13 +1,7 @@
 package com.tr4nce.rabbitcore;
 
 import com.mojang.logging.LogUtils;
-import com.tr4nce.rabbitcore.command.ChestRegistryCommand;
-import com.tr4nce.rabbitcore.command.PlayerStatsCommand;
 import com.tr4nce.rabbitcore.command.WorldCommand;
-import com.tr4nce.rabbitcore.quest.WeeklyQuests;
-import com.tr4nce.rabbitcore.registry.ModBlockEntities;
-import com.tr4nce.rabbitcore.registry.ModBlocks;
-import com.tr4nce.rabbitcore.registry.ModItems;
 import com.tr4nce.rabbitcore.world.WorldRules;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -31,10 +25,6 @@ public class Rabbitcore {
     public Rabbitcore(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.SERVER, Config.SERVER_SPEC);
         WorldRules.register();
-        ModBlocks.register(modEventBus);
-        ModItems.register(modEventBus);
-        ModBlockEntities.register(modEventBus);
-        WeeklyQuests.register();
 
         // Register ourselves for game events.
         NeoForge.EVENT_BUS.register(this);
@@ -49,8 +39,6 @@ public class Rabbitcore {
 
     @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
-        ChestRegistryCommand.register(event.getDispatcher());
-        PlayerStatsCommand.register(event.getDispatcher());
         WorldCommand.register(event.getDispatcher());
     }
 }

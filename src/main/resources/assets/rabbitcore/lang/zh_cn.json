@@ -1,6 +1,5 @@
 {
   "gamerule.rabbitcoreAllowElytraFlight": "允许鞘翅飞行",
   "gamerule.rabbitcoreRestrictTeleportCommands": "限制玩家传送指令",
-  "command.rabbitcore.teleport_disabled": "服务器当前已禁用玩家传送指令。",
-  "block.rabbitcore.rabbit_chest": "兔子箱子"
+  "command.rabbitcore.teleport_disabled": "服务器当前已禁用玩家传送指令。"
 }

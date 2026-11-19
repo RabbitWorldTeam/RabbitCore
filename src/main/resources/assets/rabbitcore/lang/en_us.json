@@ -1,6 +1,5 @@
 {
   "gamerule.rabbitcoreAllowElytraFlight": "Allow elytra flight",
   "gamerule.rabbitcoreRestrictTeleportCommands": "Restrict player teleport commands",
-  "command.rabbitcore.teleport_disabled": "Player teleport commands are disabled.",
-  "block.rabbitcore.rabbit_chest": "Rabbit Chest"
+  "command.rabbitcore.teleport_disabled": "Player teleport commands are disabled."
 }
